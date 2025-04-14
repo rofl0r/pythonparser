@@ -288,6 +288,7 @@ class Parser:
                 then_body.append(self.statement())
             if self.token.type == TT_ELSE:
                 self.advance()
+                self.consume(TT_COLON)
                 else_body = []
                 while self.token.type != TT_END:
                     else_body.append(self.statement())
