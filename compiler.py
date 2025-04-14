@@ -227,6 +227,7 @@ class Parser:
     def __init__(self, lexer):
         self.lexer = lexer
         self.token = self.lexer.next_token()
+        self.variables = set()  # Track declared variables
 
     def error(self, message):
         raise Exception(message)
@@ -257,7 +258,10 @@ class Parser:
         if t.type == TT_NUMBER:
             return ('NUM', t.value)
         if t.type == TT_IDENT:
-            return ('VAR', t.value)
+            var_name = t.value
+            if var_name not in self.variables:
+                self.error("Variable '%s' is not defined" % var_name)
+            return ('VAR', var_name)
         if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
             return ('UNARY', t.value, self.expression(UNARY_PRECEDENCE))
         if t.type == TT_LPAREN:
@@ -303,6 +307,7 @@ class Parser:
         elif self.token.type == TT_IDENT:
             var = self.token.value
             self.advance()
+            self.variables.add(var)  # Register variable as defined
             if self.token.type == TT_ASSIGN:
                 self.advance()
                 expr = self.expression(0)
@@ -321,7 +326,7 @@ def evaluate(node, env):
         if node[0] == 'NUM':
             return node[1]
         elif node[0] == 'VAR':
-            return env.get(node[1], 0)
+            return env.get(node[1], 0)  # Default is 0 (parser ensures it exists)
         elif node[0] == 'BINOP':
             left = evaluate(node[2], env)
             right = evaluate(node[3], env)
@@ -380,11 +385,18 @@ def evaluate(node, env):
 def run(text):
     lexer = Lexer(text)
     parser = Parser(lexer)
-    program = parser.parse()
-    env = {}
-    for node in program:
-        evaluate(node, env)
-    return env
+    try:
+        program = parser.parse()
+        env = {}
+        for node in program:
+            evaluate(node, env)
+        return {'success': True, 'env': env}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def should_fail(text):
+    """Run code that is expected to fail and return True if it does"""
+    return not run(text)['success']
 
 def test():
     test_cases = [
@@ -396,15 +408,36 @@ def test():
         "x = 5 | 3; y = x & 2; print y;",
         "x = 1; y = 0; if x and y: print x; end",
         "x = 15; y = ~3; print y;",
-        "x = 1; if !x or x and y: print x; end",
         "x = 5 ^ 3; print x;",
         "x = -5; print x;",
     ]
+    
+    # Test cases that are expected to fail
+    fail_test_cases = [
+        ("x = 1; if !x or x and y: print x; end", "Variable 'y' is not defined"),
+        ("print z;", "Variable 'z' is not defined"),
+        ("if x: print 1; end", "Variable 'x' is not defined")
+    ]
+    
+    # Run test cases expected to succeed
     for i, test in enumerate(test_cases):
         print("\nTest %d:" % (i + 1))
         print("Input: %s" % test)
-        env = run(test)
-        print("Environment: %s" % env)
+        result = run(test)
+        if result['success']:
+            print("Success! Environment: %s" % result['env'])
+        else:
+            print("Failed! Error: %s" % result['error'])
+    
+    # Run test cases expected to fail
+    for i, (test, expected_error) in enumerate(fail_test_cases):
+        print("\nFail Test %d:" % (i + 1))
+        print("Input: %s" % test)
+        result = run(test)
+        if not result['success'] and expected_error in result['error']:
+            print("Successfully failed with error: %s" % result['error'])
+        else:
+            print("Test didn't fail as expected! Result: %s" % result)
 
 if __name__ == '__main__':
     test()
