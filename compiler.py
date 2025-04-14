@@ -246,9 +246,6 @@ class Parser:
     def expression(self, rbp=0):
         t = self.token
         self.advance()
-        if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
-            right = self.expression(UNARY_PRECEDENCE)
-            return ('UNARY', t.value, right)
         left = self.nud(t)
         while rbp < self.lbp(self.token):
             t = self.token
@@ -261,6 +258,8 @@ class Parser:
             return ('NUM', t.value)
         if t.type == TT_IDENT:
             return ('VAR', t.value)
+        if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
+            return ('UNARY', t.value, self.expression(UNARY_PRECEDENCE))
         if t.type == TT_LPAREN:
             expr = self.expression(0)
             self.consume(TT_RPAREN)
