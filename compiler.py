@@ -63,6 +63,27 @@ class Lexer:
         self.pos = 0
         self.current_char = text[0] if text else None
 
+        # Map of characters to their respective handler methods
+        self.op_map = {
+            '+': self.handle_plus,
+            '-': self.handle_minus,
+            '*': self.handle_mult,
+            '/': self.handle_div,
+            '%': self.handle_mod,
+            '(': self.handle_lparen,
+            ')': self.handle_rparen,
+            ';': self.handle_semi,
+            ':': self.handle_colon,
+            '=': self.handle_assign_or_eq,
+            '!': self.handle_not_or_ne,
+            '>': self.handle_ge,
+            '<': self.handle_le,
+            '&': self.handle_bitand,
+            '|': self.handle_bitor,
+            '~': self.handle_bitnot,
+            '^': self.handle_xor,
+        }
+
     def error(self):
         raise Exception('Invalid character')
 
@@ -99,6 +120,87 @@ class Lexer:
             return Token(TT_OR, value)
         return Token(TT_IDENT, value)
 
+    # Handlers for various operators
+    def handle_plus(self):
+        self.advance()
+        return Token(TT_PLUS, '+')
+
+    def handle_minus(self):
+        self.advance()
+        return Token(TT_MINUS, '-')
+
+    def handle_mult(self):
+        self.advance()
+        return Token(TT_MULT, '*')
+
+    def handle_div(self):
+        self.advance()
+        return Token(TT_DIV, '/')
+
+    def handle_mod(self):
+        self.advance()
+        return Token(TT_MOD, '%')
+
+    def handle_lparen(self):
+        self.advance()
+        return Token(TT_LPAREN, '(')
+
+    def handle_rparen(self):
+        self.advance()
+        return Token(TT_RPAREN, ')')
+
+    def handle_semi(self):
+        self.advance()
+        return Token(TT_SEMI, ';')
+
+    def handle_colon(self):
+        self.advance()
+        return Token(TT_COLON, ':')
+
+    def handle_assign_or_eq(self):
+        self.advance()
+        if self.current_char == '=':
+            self.advance()
+            return Token(TT_EQ, '==')
+        return Token(TT_ASSIGN, '=')
+
+    def handle_not_or_ne(self):
+        self.advance()
+        if self.current_char == '=':
+            self.advance()
+            return Token(TT_NE, '!=')
+        return Token(TT_NOT, '!')
+
+    def handle_ge(self):
+        self.advance()
+        if self.current_char == '=':
+            self.advance()
+            return Token(TT_GE, '>=')
+        self.error()
+
+    def handle_le(self):
+        self.advance()
+        if self.current_char == '=':
+            self.advance()
+            return Token(TT_LE, '<=')
+        self.error()
+
+    def handle_bitand(self):
+        self.advance()
+        return Token(TT_BITAND, '&')
+
+    def handle_bitor(self):
+        self.advance()
+        return Token(TT_BITOR, '|')
+
+    def handle_bitnot(self):
+        self.advance()
+        return Token(TT_BITNOT, '~')
+
+    def handle_xor(self):
+        self.advance()
+        return Token(TT_XOR, '^')
+
     def next_token(self):
         while self.current_char:
             if self.current_char.isspace():
@@ -111,85 +213,9 @@ class Lexer:
             if self.current_char.isalpha() or self.current_char == '_':
                 return self.identifier()
 
-            if self.current_char == '+':
-                self.advance()
-                return Token(TT_PLUS, '+')
-
-            if self.current_char == '-':
-                self.advance()
-                return Token(TT_MINUS, '-')
-
-            if self.current_char == '*':
-                self.advance()
-                return Token(TT_MULT, '*')
-
-            if self.current_char == '/':
-                self.advance()
-                return Token(TT_DIV, '/')
-
-            if self.current_char == '%':
-                self.advance()
-                return Token(TT_MOD, '%')
-
-            if self.current_char == '(':
-                self.advance()
-                return Token(TT_LPAREN, '(')
-
-            if self.current_char == ')':
-                self.advance()
-                return Token(TT_RPAREN, ')')
-
-            if self.current_char == ';':
-                self.advance()
-                return Token(TT_SEMI, ';')
-
-            if self.current_char == ':':
-                self.advance()
-                return Token(TT_COLON, ':')
-
-            if self.current_char == '=':
-                self.advance()
-                if self.current_char == '=':
-                    self.advance()
-                    return Token(TT_EQ, '==')
-                return Token(TT_ASSIGN, '=')
-
-            if self.current_char == '!':
-                self.advance()
-                if self.current_char == '=':
-                    self.advance()
-                    return Token(TT_NE, '!=')
-                return Token(TT_NOT, '!')
-
-            if self.current_char == '>':
-                self.advance()
-                if self.current_char == '=':
-                    self.advance()
-                    return Token(TT_GE, '>=')
-                self.error()
-
-            if self.current_char == '<':
-                self.advance()
-                if self.current_char == '=':
-                    self.advance()
-                    return Token(TT_LE, '<=')
-                self.error()
-
-            if self.current_char == '&':
-                self.advance()
-                return Token(TT_BITAND, '&')
-
-            if self.current_char == '|':
-                self.advance()
-                return Token(TT_BITOR, '|')
-
-            if self.current_char == '~':
-                self.advance()
-                return Token(TT_BITNOT, '~')
-
-            if self.current_char == '^':
-                self.advance()
-                return Token(TT_XOR, '^')
+            # Use op_map for operators
+            if self.current_char in self.op_map:
+                return self.op_map[self.current_char]()
 
             self.error()
 
