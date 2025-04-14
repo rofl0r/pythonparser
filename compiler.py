@@ -26,7 +26,7 @@ TT_BITAND = 23
 TT_BITOR = 24
 TT_BITNOT = 25
 TT_XOR = 26
-TT_COLON = 27
+TT_DO = 27
 
 # Global hashtable for keywords
 KEYWORDS = {
@@ -35,7 +35,8 @@ KEYWORDS = {
     'end': TT_END,
     'print': TT_PRINT,
     'and': TT_AND,
-    'or': TT_OR
+    'or': TT_OR,
+    'do': TT_DO  # Added 'do' keyword
 }
 
 # Global precedence table for binary operators
@@ -83,7 +84,7 @@ class Lexer:
             '(': self.handle_lparen,
             ')': self.handle_rparen,
             ';': self.handle_semi,
-            ':': self.handle_colon,
+            # ':': self.handle_colon,  # Removed colon handler
             '=': self.handle_assign_or_eq,
             '!': self.handle_not_or_ne,
             '>': self.handle_ge,
@@ -155,9 +156,7 @@ class Lexer:
         self.advance()
         return Token(TT_SEMI, ';')
 
-    def handle_colon(self):
-        self.advance()
-        return Token(TT_COLON, ':')
+    # Removed handle_colon method
 
     def handle_assign_or_eq(self):
         self.advance()
@@ -285,13 +284,13 @@ class Parser:
         if self.token.type == TT_IF:
             self.advance()
             condition = self.expression(0)
-            self.consume(TT_COLON)
+            self.consume(TT_DO)
             then_body = []
             while self.token.type not in [TT_ELSE, TT_END]:
                 then_body.append(self.statement())
             if self.token.type == TT_ELSE:
                 self.advance()
-                self.consume(TT_COLON)
+                self.consume(TT_DO)
                 else_body = []
                 while self.token.type != TT_END:
                     else_body.append(self.statement())
@@ -401,12 +400,12 @@ def should_fail(text):
 def test():
     test_cases = [
         "x = 5 + 3 * 2; print x;",
-        "x = 1; if x == 1: print x; end",
-        "x = 1; if x == 1: print x; else: print 0; end",
+        "x = 1; if x == 1 do print x; end",
+        "x = 1; if x == 1 do print x; else do print 0; end",
         "x = 5 | 3; print x;",
         "x = 5 & 3; print x;",
         "x = 5 | 3; y = x & 2; print y;",
-        "x = 1; y = 0; if x and y: print x; end",
+        "x = 1; y = 0; if x and y do print x; end",
         "x = 15; y = ~3; print y;",
         "x = 5 ^ 3; print x;",
         "x = -5; print x;",
@@ -414,9 +413,9 @@ def test():
     
     # Test cases that are expected to fail
     fail_test_cases = [
-        ("x = 1; if !x or x and y: print x; end", "Variable 'y' is not defined"),
+        ("x = 1; if !x or x and y do print x; end", "Variable 'y' is not defined"),
         ("print z;", "Variable 'z' is not defined"),
-        ("if x: print 1; end", "Variable 'x' is not defined")
+        ("if x do print 1; end", "Variable 'x' is not defined")
     ]
     
     # Run test cases expected to succeed
