@@ -28,6 +28,16 @@ TT_BITNOT = 25
 TT_XOR = 26
 TT_COLON = 27
 
+# Global hashtable for keywords
+KEYWORDS = {
+    'if': TT_IF,
+    'else': TT_ELSE,
+    'end': TT_END,
+    'print': TT_PRINT,
+    'and': TT_AND,
+    'or': TT_OR
+}
+
 # Global precedence table for binary operators
 BINARY_PRECEDENCE = {
     TT_OR: 10,      # lowest precedence
@@ -102,23 +112,15 @@ class Lexer:
         return Token(TT_NUMBER, int(self.text[start:self.pos]))
 
     def identifier(self):
+        """Parse an identifier or keyword using the global KEYWORDS hashtable"""
         start = self.pos
         while self.current_char and (self.current_char.isalnum() or self.current_char == '_'):
             self.advance()
         value = self.text[start:self.pos]
-        if value == 'if':
-            return Token(TT_IF, value)
-        elif value == 'else':
-            return Token(TT_ELSE, value)
-        elif value == 'end':
-            return Token(TT_END, value)
-        elif value == 'print':
-            return Token(TT_PRINT, value)
-        elif value == 'and':
-            return Token(TT_AND, value)
-        elif value == 'or':
-            return Token(TT_OR, value)
-        return Token(TT_IDENT, value)
+
+        # Look up in the global KEYWORDS hashtable, default to TT_IDENT if not found
+        token_type = KEYWORDS.get(value, TT_IDENT)
+        return Token(token_type, value)
 
     # Handlers for various operators
     def handle_plus(self):
