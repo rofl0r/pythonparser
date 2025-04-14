@@ -409,6 +409,12 @@ def test():
         "x = 15; y = ~3; print y;",
         "x = 5 ^ 3; print x;",
         "x = -5; print x;",
+        "x = 1; if x == 0 do print 0; else if x == 1 do print 1; end",
+        "x = 2; if x == 0 do print 0; else if x == 1 do print 1; else do print 2; end",
+        "x = 1; y = 1; z = 0; if x == 1 and y == 1 do print 1; end",
+        "x = 1; y = 0; z = 1; if x == 0 or y == 1 or z == 1 do print 1; else do print 0; end",
+        "x = 1; y = 1; if x == 1 and y == 0 or x == 0 and y == 1 do print 1; else do print 0; end",
+
     ]
     
     # Test cases that are expected to fail
