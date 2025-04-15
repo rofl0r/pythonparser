@@ -3,14 +3,7 @@
 
 # Import type constants from compiler.py
 from __future__ import division  # Use true division
-
-# We'll define these locally since we can't import from compiler.py (circular import)
-TYPE_UNKNOWN = 0
-TYPE_INT = 1
-TYPE_FLOAT = 2
-TYPE_UINT = 3
-TYPE_LONG = 4
-TYPE_ULONG = 5
+from shared import *
 
 # Helper functions for type handling
 def is_integer_type(type_):
