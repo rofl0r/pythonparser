@@ -276,7 +276,7 @@ class Parser:
     def led(self, t, left):
         if t.type in [TT_PLUS, TT_MINUS, TT_MULT, TT_DIV, TT_MOD]:
             return ('BINOP', t.value, left, self.expression(self.lbp(t)))
-        elif t.type in [TT_EQ, TT_NE, TT_GE, TT_LE]:
+        elif t.type in [TT_EQ, TT_NE, TT_GE, TT_LE, TT_LT, TT_GT]:
             return ('COMPARE', t.value, left, self.expression(self.lbp(t)))
         elif t.type in [TT_AND, TT_OR]:
             return ('LOGICAL', t.value, left, self.expression(self.lbp(t)))
@@ -390,6 +390,9 @@ def evaluate(node, env):
             elif op == '!=': return 1 if left != right else 0
             elif op == '>=': return 1 if left >= right else 0
             elif op == '<=': return 1 if left <= right else 0
+            elif op == '>': return 1 if left > right else 0
+            elif op == '<': return 1 if left < right else 0
+
         elif node[0] == 'LOGICAL':
             left = evaluate(node[2], env)
             op = node[1]
