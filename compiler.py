@@ -51,6 +51,26 @@ TT_TYPE_FLOAT = 45
 TT_INT_LITERAL = 46
 TT_FLOAT_LITERAL = 47
 
+# AST Node types (C-style enums)
+AST_NODE_BASE = 0
+AST_NODE_NUMBER = 1
+AST_NODE_VARIABLE = 2
+AST_NODE_BINARY_OP = 3
+AST_NODE_UNARY_OP = 4
+AST_NODE_ASSIGN = 5
+AST_NODE_COMPOUND_ASSIGN = 6
+AST_NODE_PRINT = 7
+AST_NODE_IF = 8
+AST_NODE_WHILE = 9
+AST_NODE_BREAK = 10
+AST_NODE_CONTINUE = 11
+AST_NODE_EXPR_STMT = 12
+AST_NODE_VAR_DECL = 13
+AST_NODE_EMPTY = 14
+AST_NODE_COMPARE = 15
+AST_NODE_LOGICAL = 16
+AST_NODE_BITOP = 17
+
 # Variable types
 TYPE_UNKNOWN = 0
 TYPE_INT = 1
@@ -84,6 +104,30 @@ def var_type_to_string(var_type):
     if var_type == TYPE_FLOAT: return "float"
     return "unknown"
 
+def ast_node_type_to_string(node_type):
+    """Convert AST node type to string for debugging"""
+    type_names = {
+        AST_NODE_BASE: "BASE",
+        AST_NODE_NUMBER: "NUMBER",
+        AST_NODE_VARIABLE: "VARIABLE",
+        AST_NODE_BINARY_OP: "BINARY_OP",
+        AST_NODE_UNARY_OP: "UNARY_OP",
+        AST_NODE_ASSIGN: "ASSIGN",
+        AST_NODE_COMPOUND_ASSIGN: "COMPOUND_ASSIGN",
+        AST_NODE_PRINT: "PRINT",
+        AST_NODE_IF: "IF",
+        AST_NODE_WHILE: "WHILE",
+        AST_NODE_BREAK: "BREAK",
+        AST_NODE_CONTINUE: "CONTINUE",
+        AST_NODE_EXPR_STMT: "EXPR_STMT",
+        AST_NODE_VAR_DECL: "VAR_DECL",
+        AST_NODE_EMPTY: "EMPTY",
+        AST_NODE_COMPARE: "COMPARE",
+        AST_NODE_LOGICAL: "LOGICAL",
+        AST_NODE_BITOP: "BITOP"
+    }
+    return type_names.get(node_type, "UNKNOWN")
+
 # Global precedence table for binary operators
 BINARY_PRECEDENCE = {
     TT_ASSIGN: 10,   # lowest precedence (Python: assignments)
@@ -109,6 +153,287 @@ BINARY_PRECEDENCE = {
 
 # Unary operator precedence (higher than binary operators)
 UNARY_PRECEDENCE = 100
+
+# Base class for all AST nodes
+class ASTNode(object):
+    def __init__(self):
+        self.node_type = AST_NODE_BASE
+
+    def eval(self, env):
+        raise NotImplementedError("Evaluation not implemented for this node")
+
+class NumberNode(ASTNode):
+    def __init__(self, value, expr_type):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_NUMBER
+        self.value = value
+        self.expr_type = expr_type  # TYPE_INT or TYPE_FLOAT
+
+    def eval(self, env):
+        return self.value
+
+class VariableNode(ASTNode):
+    def __init__(self, name, var_type):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_VARIABLE
+        self.name = name
+        self.expr_type = var_type
+
+    def eval(self, env):
+        if self.name not in env:
+            raise RuntimeError("Variable '%s' is not defined" % self.name)
+        return env[self.name]
+
+class BinaryOpNode(ASTNode):
+    def __init__(self, operator, left, right, result_type):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_BINARY_OP
+        self.operator = operator
+        self.left = left
+        self.right = right
+        self.expr_type = result_type
+
+    def eval(self, env):
+        left_val = self.left.eval(env)
+        right_val = self.right.eval(env)
+        
+        if self.operator == '+':
+            return left_val + right_val
+        elif self.operator == '-':
+            return left_val - right_val
+        elif self.operator == '*':
+            return left_val * right_val
+        elif self.operator == '/':
+            if self.expr_type == TYPE_INT:
+                return left_val // right_val  # Integer division
+            else:
+                return left_val / right_val   # Float division
+        elif self.operator == '%':
+            return left_val % right_val
+        elif self.operator == 'shl':
+            return left_val << right_val
+        elif self.operator == 'shr':
+            return left_val >> right_val
+
+class UnaryOpNode(ASTNode):
+    def __init__(self, operator, operand, result_type):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_UNARY_OP
+        self.operator = operator
+        self.operand = operand
+        self.expr_type = result_type
+
+    def eval(self, env):
+        value = self.operand.eval(env)
+        
+        if self.operator == '-':
+            return -value
+        elif self.operator == '!':
+            return 0 if value else 1
+        elif self.operator == 'bitnot':
+            return ~value
+
+class AssignNode(ASTNode):
+    def __init__(self, var_name, expr, var_type):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_ASSIGN
+        self.var_name = var_name
+        self.expr = expr
+        self.expr_type = var_type
+
+    def eval(self, env):
+        value = self.expr.eval(env)
+        env[self.var_name] = value
+        return value
+
+class CompoundAssignNode(ASTNode):
+    def __init__(self, op_type, var_name, expr, var_type):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_COMPOUND_ASSIGN
+        self.op_type = op_type
+        self.var_name = var_name
+        self.expr = expr
+        self.expr_type = var_type
+
+    def eval(self, env):
+        current_value = env.get(self.var_name, 0)
+        expr_value = self.expr.eval(env)
+        
+        if self.op_type == TT_PLUS_ASSIGN:
+            result = current_value + expr_value
+        elif self.op_type == TT_MINUS_ASSIGN:
+            result = current_value - expr_value
+        elif self.op_type == TT_MULT_ASSIGN:
+            result = current_value * expr_value
+        elif self.op_type == TT_DIV_ASSIGN:
+            if self.expr_type == TYPE_INT:
+                result = current_value // expr_value  # Integer division
+            else:
+                result = current_value / expr_value   # Float division
+        elif self.op_type == TT_MOD_ASSIGN:
+            result = current_value % expr_value
+            
+        env[self.var_name] = result
+        return result
+
+class PrintNode(ASTNode):
+    def __init__(self, expr):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_PRINT
+        self.expr = expr
+
+    def eval(self, env):
+        value = self.expr.eval(env)
+        print(value)
+        return value
+
+class IfNode(ASTNode):
+    def __init__(self, condition, then_body, else_body=None):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_IF
+        self.condition = condition
+        self.then_body = then_body  # List of statement nodes
+        self.else_body = else_body  # List of statement nodes or None
+
+    def eval(self, env):
+        if self.condition.eval(env):
+            for stmt in self.then_body:
+                stmt.eval(env)
+        elif self.else_body:
+            for stmt in self.else_body:
+                stmt.eval(env)
+        return 0
+
+class WhileNode(ASTNode):
+    def __init__(self, condition, body):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_WHILE
+        self.condition = condition
+        self.body = body  # List of statement nodes
+
+    def eval(self, env):
+        while self.condition.eval(env):
+            try:
+                for stmt in self.body:
+                    try:
+                        stmt.eval(env)
+                    except ContinueException:
+                        break
+                    except BreakException:
+                        raise
+            except BreakException:
+                break
+        return 0
+
+class BreakNode(ASTNode):
+    def __init__(self):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_BREAK
+
+    def eval(self, env):
+        raise BreakException()
+
+class ContinueNode(ASTNode):
+    def __init__(self):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_CONTINUE
+
+    def eval(self, env):
+        raise ContinueException()
+
+class ExprStmtNode(ASTNode):
+    def __init__(self, expr):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_EXPR_STMT
+        self.expr = expr
+
+    def eval(self, env):
+        return self.expr.eval(env)
+
+class VarDeclNode(ASTNode):
+    def __init__(self, decl_type, var_name, var_type, expr):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_VAR_DECL
+        self.decl_type = decl_type
+        self.var_name = var_name
+        self.var_type = var_type
+        self.expr = expr
+
+    def eval(self, env):
+        value = self.expr.eval(env)
+        env[self.var_name] = value
+        return value
+
+class EmptyNode(ASTNode):
+    def __init__(self):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_EMPTY
+
+    def eval(self, env):
+        return 0
+
+class CompareNode(ASTNode):
+    def __init__(self, operator, left, right):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_COMPARE
+        self.operator = operator
+        self.left = left
+        self.right = right
+        self.expr_type = TYPE_INT  # Comparisons always return int
+
+    def eval(self, env):
+        left_val = self.left.eval(env)
+        right_val = self.right.eval(env)
+        
+        if self.operator == '==':
+            return 1 if left_val == right_val else 0
+        elif self.operator == '!=':
+            return 1 if left_val != right_val else 0
+        elif self.operator == '>=':
+            return 1 if left_val >= right_val else 0
+        elif self.operator == '>':
+            return 1 if left_val > right_val else 0
+        elif self.operator == '<':
+            return 1 if left_val < right_val else 0
+        elif self.operator == '<=':
+            return 1 if left_val <= right_val else 0
+
+class LogicalNode(ASTNode):
+    def __init__(self, operator, left, right):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_LOGICAL
+        self.operator = operator
+        self.left = left
+        self.right = right
+        self.expr_type = TYPE_INT  # Logical ops always return int
+
+    def eval(self, env):
+        left_val = self.left.eval(env)
+        
+        if self.operator == 'and':
+            return 1 if left_val and self.right.eval(env) else 0
+        elif self.operator == 'or':
+            return 1 if left_val or self.right.eval(env) else 0
+
+class BitOpNode(ASTNode):
+    def __init__(self, operator, left, right):
+        ASTNode.__init__(self)
+        self.node_type = AST_NODE_BITOP
+        self.operator = operator
+        self.left = left
+        self.right = right
+        self.expr_type = TYPE_INT  # Bitwise ops always return int
+
+    def eval(self, env):
+        left_val = self.left.eval(env)
+        right_val = self.right.eval(env)
+        
+        if self.operator == '&':
+            return left_val & right_val
+        elif self.operator == '|':
+            return left_val | right_val
+        elif self.operator == 'xor':
+            return left_val ^ right_val
 
 class Token:
     def __init__(self, type, value, line=0, column=0):
@@ -418,11 +743,17 @@ class Parser:
             self.error("Type mismatch: can't assign a value of type %s to %s (type %s)" %
                       (var_type_to_string(expr_type), var_name, var_type_to_string(var_type)))
 
+    def determine_result_type(self, left_type, right_type):
+        """Determine the result type of a binary operation based on operand types"""
+        if left_type != right_type:
+            self.error("Type mismatch: cannot operate on values of different types")
+        return left_type
+
     def nud(self, t):
         if t.type == TT_INT_LITERAL:
-            return ('NUM', t.value, TYPE_INT)
+            return NumberNode(t.value, TYPE_INT)
         if t.type == TT_FLOAT_LITERAL:
-            return ('NUM', t.value, TYPE_FLOAT)
+            return NumberNode(t.value, TYPE_FLOAT)
         if t.type == TT_IDENT:
             var_name = t.value
             # For a variable in an expression context:
@@ -432,12 +763,12 @@ class Parser:
                 
             # Get the variable type
             var_type = self.var_types.get(var_name, TYPE_UNKNOWN)
-            return ('VAR', var_name, var_type)
+            return VariableNode(var_name, var_type)
             
         if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
             expr = self.expression(UNARY_PRECEDENCE)
-            expr_type = expr[2] if len(expr) > 2 else TYPE_INT
-            return ('UNARY', t.value, expr, expr_type)
+            expr_type = expr.expr_type if hasattr(expr, 'expr_type') else TYPE_INT
+            return UnaryOpNode(t.value, expr, expr_type)
             
         if t.type == TT_LPAREN:
             expr = self.expression(0)
@@ -448,12 +779,9 @@ class Parser:
 
     def led(self, t, left):
         # Handle assignment as an operator
-        if t.type == TT_ASSIGN and left[0] == 'VAR':
+        if t.type == TT_ASSIGN and left.node_type == AST_NODE_VARIABLE:
             # Get variable name from left side
-            var_name = left[1]
-            var_type = left[2] if len(left) > 2 else TYPE_UNKNOWN
-            
-            # Always get the most up-to-date type from our variable table
+            var_name = left.name
             var_type = self.var_types.get(var_name, TYPE_UNKNOWN)
             
             # Check if variable is a constant (declared with 'let')
@@ -462,48 +790,48 @@ class Parser:
                 
             # Parse the right side expression
             right = self.expression(0)
-            right_type = right[2] if len(right) > 2 else TYPE_UNKNOWN
+            right_type = right.expr_type if hasattr(right, 'expr_type') else TYPE_UNKNOWN
             
             # For assignments in conditions (e.g. while x = y do),
-            # we should use the fully resolved types from our variable table
-            if right[0] == 'VAR':
-                right_var = right[1]
+            # use the fully resolved types
+            if right.node_type == AST_NODE_VARIABLE:
+                right_var = right.name
                 right_type = self.var_types.get(right_var, right_type)
-                
-                # Add debug code here if needed to inspect the types
-                # print("Assignment in condition: %s(%s) = %s(%s)" % 
-                #      (var_name, var_type_to_string(var_type), 
-                #       right_var, var_type_to_string(right_type)))
             
             # Check type compatibility
             self.check_type_compatibility(var_name, right_type)
             
-            return ('ASSIGN', var_name, right, var_type)
+            return AssignNode(var_name, right, var_type)
             
         if t.type in [TT_PLUS, TT_MINUS, TT_MULT, TT_DIV, TT_MOD, TT_SHL, TT_SHR]:
             right = self.expression(self.lbp(t))
             
             # Determine result type (float if either operand is float)
-            left_type = left[2] if len(left) > 2 else TYPE_INT 
-            right_type = right[2] if len(right) > 2 else TYPE_INT
-            result_type = TYPE_FLOAT if (left_type == TYPE_FLOAT or right_type == TYPE_FLOAT) else TYPE_INT
+            left_type = left.expr_type if hasattr(left, 'expr_type') else TYPE_INT
+            right_type = right.expr_type if hasattr(right, 'expr_type') else TYPE_INT
             
-            return ('BINOP', t.value, left, right, result_type)
+            # If types don't match, we need to fail
+            if left_type != right_type and left_type != TYPE_UNKNOWN and right_type != TYPE_UNKNOWN:
+                self.error("Type mismatch in binary operation: %s and %s"%(var_type_to_string(left_type), var_type_to_string(right_type)))
+                
+            result_type = TYPE_FLOAT if left_type == TYPE_FLOAT else TYPE_INT
+            
+            return BinaryOpNode(t.value, left, right, result_type)
             
         elif t.type in [TT_EQ, TT_NE, TT_GE, TT_LE, TT_LT, TT_GT]:
             right = self.expression(self.lbp(t))
             # Comparisons always return an integer (0/1 representing false/true)
-            return ('COMPARE', t.value, left, right, TYPE_INT)
+            return CompareNode(t.value, left, right)
             
         elif t.type in [TT_AND, TT_OR]:
             right = self.expression(self.lbp(t))
             # Logical operations always return an integer (0/1 representing false/true)
-            return ('LOGICAL', t.value, left, right, TYPE_INT)
+            return LogicalNode(t.value, left, right)
             
         elif t.type in [TT_XOR, TT_BITOR, TT_BITAND]:
             right = self.expression(self.lbp(t))
             # Bit operations are performed on integers and return integers
-            return ('BITOP', t.value, left, right, TYPE_INT)
+            return BitOpNode(t.value, left, right)
             
         raise Exception('Unexpected token type %d' % t.type)
 
@@ -527,7 +855,7 @@ class Parser:
         # Handle empty statements (lone semicolons)
         if self.token.type == TT_SEMI:
             self.advance()  # Skip the semicolon
-            return ('EMPTY',)  # Return an empty statement node
+            return EmptyNode()
         
         # Handle variable declarations (var and let)
         if self.token.type in [TT_VAR, TT_LET]:
@@ -553,16 +881,16 @@ class Parser:
                 expr = self.expression(0)
                 
                 # Infer the type from expression
-                if expr[0] == 'NUM' and len(expr) > 2:
-                    var_type = expr[2]
-                elif expr[0] == 'VAR':
+                if expr.node_type == AST_NODE_NUMBER:
+                    var_type = expr.expr_type
+                elif expr.node_type == AST_NODE_VARIABLE:
                     # Get type from referenced variable
-                    ref_var = expr[1]
+                    ref_var = expr.name
                     var_type = self.var_types.get(ref_var, TYPE_UNKNOWN)
                     if var_type == TYPE_UNKNOWN:
                         self.error("Cannot infer type from variable '%s' with unknown type" % ref_var)
-                elif len(expr) > 3:  # Complex expressions might have type info at the end
-                    var_type = expr[-1] if isinstance(expr[-1], int) else TYPE_INT
+                elif hasattr(expr, 'expr_type'):
+                    var_type = expr.expr_type
                 else:
                     # Default to int for other cases
                     var_type = TYPE_INT
@@ -578,7 +906,7 @@ class Parser:
                 expr = self.expression(0)
                 
                 # Check type compatibility
-                expr_type = expr[2] if len(expr) > 2 else TYPE_UNKNOWN
+                expr_type = expr.expr_type if hasattr(expr, 'expr_type') else TYPE_UNKNOWN
                 if expr_type != TYPE_UNKNOWN and var_type != expr_type:
                     self.error("Type mismatch in initialization: can't assign %s to %s (type %s)" % 
                               (var_type_to_string(expr_type), var_name, var_type_to_string(var_type)))
@@ -598,7 +926,7 @@ class Parser:
                 self.constants.add(var_name)
                 
             self.check_statement_end()
-            return ('VAR_DECL', decl_type, var_name, var_type, expr)
+            return VarDeclNode(decl_type, var_name, var_type, expr)
             
         if self.token.type == TT_IF:
             self.advance()
@@ -630,13 +958,13 @@ class Parser:
                     else:
                         self.error("Expected 'if' or 'do' after 'else'")
                     
-                    return ('IF', condition, then_body, else_body)
-                return ('IF', condition, then_body, None)
+                    return IfNode(condition, then_body, else_body)
+                return IfNode(condition, then_body, None)
             else:
                 # We found ELSE without END - error
                 self.error("Expected 'end' before 'else'")
                 
-            return ('IF', condition, then_body, None)  # Should never reach here
+            return IfNode(condition, then_body, None)  # Should never reach here
         elif self.token.type == TT_WHILE:
             self.advance()
             condition = self.expression(0)
@@ -645,20 +973,20 @@ class Parser:
             while self.token.type != TT_END:
                 body.append(self.statement())
             self.consume(TT_END)
-            return ('WHILE', condition, body)
+            return WhileNode(condition, body)
         elif self.token.type == TT_PRINT:
             self.advance()
             expr = self.expression(0)
             self.check_statement_end()
-            return ('PRINT', expr)
+            return PrintNode(expr)
         elif self.token.type == TT_BREAK:
             self.advance()
             self.check_statement_end()
-            return ('BREAK',)
+            return BreakNode()
         elif self.token.type == TT_CONTINUE:
             self.advance()
             self.check_statement_end()
-            return ('CONTINUE',)
+            return ContinueNode()
         elif self.token.type == TT_IDENT:
             var = self.token.value
             self.advance()
@@ -684,47 +1012,30 @@ class Parser:
                 # Parse the expression
                 expr = self.expression(0)
                 
-                # Extract type from expression - with special handling for binops
-                if expr[0] == 'BINOP':
-                    # For binary operations like y + 1, we need to use the result type at position 4
-                    expr_type = expr[4] if len(expr) > 4 else TYPE_INT
-                else:
-                    expr_type = expr[2] if len(expr) > 2 else TYPE_UNKNOWN
-                
-                # For binary operations involving variables, make sure we have the correct type
-                if expr[0] == 'BINOP' and expr[2][0] == 'VAR':
-                    # Get the variable reference in the binop and its type
-                    binop_var_name = expr[2][1]
-                    binop_var_type = self.var_types.get(binop_var_name, TYPE_UNKNOWN)
-                    if binop_var_type != TYPE_UNKNOWN:
-                        # If the variable has a known type, use that to ensure consistency
-                        expr_type = TYPE_FLOAT if binop_var_type == TYPE_FLOAT else TYPE_INT
-                
-                # We need to handle the case where the compiler doesn't have an updated
-                # type for the variable in the AST yet, so get the type from our type tracking
-                var_type = self.var_types.get(var, TYPE_UNKNOWN)
+                # Get type from expression
+                expr_type = expr.expr_type if hasattr(expr, 'expr_type') else TYPE_UNKNOWN
                 
                 # Check type compatibility for all assignments
                 self.check_type_compatibility(var, expr_type)
                 
-                # For compound operators, we need to generate ("COMPOUND_ASSIGN", op_type, var, expr)
+                # For compound operators, use CompoundAssignNode
                 if op != TT_ASSIGN:
                     self.check_statement_end()
-                    return ('COMPOUND_ASSIGN', op, var, expr, var_type)
+                    return CompoundAssignNode(op, var, expr, var_type)
                     
                 # Regular assignment
                 self.check_statement_end()
-                return ('ASSIGN', var, expr, var_type)
+                return AssignNode(var, expr, var_type)
             # Handle expression statements (e.g., an identifier by itself)
             var_type = self.var_types.get(var, TYPE_UNKNOWN)
-            expr = ('VAR', var, var_type)
+            expr = VariableNode(var, var_type)
             self.check_statement_end()
-            return ('EXPR_STMT', expr)
+            return ExprStmtNode(expr)
         elif self.token.type in [TT_INT_LITERAL, TT_FLOAT_LITERAL, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
             # Also handle expressions that start with other tokens
             expr = self.expression(0)
             self.check_statement_end()
-            return ('EXPR_STMT', expr)
+            return ExprStmtNode(expr)
         token_type_name = token_name(self.token.type)
         self.error('Invalid statement starting with "%s" (%s)' %
                   (self.token.value, token_type_name))
@@ -750,143 +1061,6 @@ class Parser:
             statements.append(self.statement())
         return statements
 
-def evaluate(node, env):
-    if isinstance(node, tuple):
-        # Handle empty statements (do nothing)
-        if node[0] == 'EMPTY':
-            return 0
-        if node[0] == 'NUM':
-            return node[1]  # The value is at index 1, type at index 2
-        elif node[0] == 'VAR':
-            return env.get(node[1], 0)  # Default is 0 (parser ensures it exists)
-        elif node[0] == 'BREAK':
-            raise BreakException()
-        elif node[0] == 'CONTINUE':
-            raise ContinueException()
-        elif node[0] == 'VAR_DECL':
-            # Variable declaration node: ('VAR_DECL', decl_type, var_name, var_type, expr)
-            var_name = node[2]
-            value = evaluate(node[4], env)
-            env[var_name] = value
-            return value
-        elif node[0] == 'BINOP':
-            left = evaluate(node[2], env)  # The left operand
-            right = evaluate(node[3], env)  # The right operand
-            op = node[1]
-            result_type = node[4] if len(node) > 4 else TYPE_INT  # Get result type if available
-            
-            if op == '+': return left + right
-            elif op == '-': return left - right
-            elif op == '*': return left * right
-            elif op == '/': 
-                # Handle division based on result type
-                if result_type == TYPE_INT and isinstance(left, int) and isinstance(right, int):
-                    return left // right  # Integer division
-                else:
-                    return left / right  # Float division
-            elif op == '%': return left % right
-            elif op == 'shl': return left << right
-            elif op == 'shr': return left >> right
-
-        elif node[0] == 'UNARY':
-            right = evaluate(node[2], env)
-            op = node[1]
-            if op == '-': return -right
-            elif op == '!': return 0 if right else 1
-            elif op == 'bitnot': return ~right
-        elif node[0] == 'ASSIGN':
-            value = evaluate(node[2], env)
-            env[node[1]] = value
-            return value
-        elif node[0] == 'COMPOUND_ASSIGN':
-            op_type = node[1]
-            var = node[2]
-            expr_value = evaluate(node[3], env)
-            
-            # Get the current value of the variable (defaulting to 0 if not set)
-            current_value = env.get(var, 0)
-            
-            # Perform the appropriate operation based on the operator type
-            if op_type == TT_PLUS_ASSIGN:
-                result = current_value + expr_value
-            elif op_type == TT_MINUS_ASSIGN:
-                result = current_value - expr_value
-            elif op_type == TT_MULT_ASSIGN:
-                result = current_value * expr_value
-            elif op_type == TT_DIV_ASSIGN:
-                # Handle division based on operand types
-                var_type = node[4] if len(node) > 4 else TYPE_UNKNOWN
-                if var_type == TYPE_INT and isinstance(current_value, int) and isinstance(expr_value, int):
-                    result = current_value // expr_value  # Integer division
-                else:
-                    result = current_value / expr_value  # Float division
-            elif op_type == TT_MOD_ASSIGN:
-                result = current_value % expr_value
-            else:
-                # This should never happen if parser is correct
-                raise Exception("Unknown compound assignment operator: %s" % token_name(op_type))
-                
-            # Store the result back in the variable and return it
-            env[var] = result
-            return result
-        elif node[0] == 'EXPR_STMT':
-            # Evaluate the expression and discard the result
-            # (For expressions used as statements)
-            return evaluate(node[1], env)
-        elif node[0] == 'PRINT':
-            value = evaluate(node[1], env)
-            print(value)
-            return value
-        elif node[0] == 'IF':
-            condition = evaluate(node[1], env)
-            if condition:
-                for stmt in node[2]:
-                    evaluate(stmt, env)
-            elif node[3]:  # else block exists
-                for stmt in node[3]:
-                    evaluate(stmt, env)
-        elif node[0] == 'WHILE':
-            while evaluate(node[1], env):  # Evaluate condition
-                try:
-                    for stmt in node[2]:  # Execute body
-                        try:
-                            evaluate(stmt, env)
-                        except ContinueException:
-                            # Skip rest of current iteration
-                            break
-                        except BreakException:
-                            # Exit the loop completely
-                            raise
-                except BreakException:
-                    # Exit the loop
-                    break
-            return 0
-        elif node[0] == 'COMPARE':
-            left = evaluate(node[2], env)
-            right = evaluate(node[3], env)
-            op = node[1]
-            if op == '==': return 1 if left == right else 0
-            elif op == '!=': return 1 if left != right else 0
-            elif op == '>=': return 1 if left >= right else 0
-            elif op == '>': return 1 if left > right else 0
-            elif op == '<': return 1 if left < right else 0
-            elif op == '<=': return 1 if left <= right else 0
-        elif node[0] == 'LOGICAL':
-            left = evaluate(node[2], env)
-            op = node[1]
-            if op == 'and':
-                return 1 if left and evaluate(node[3], env) else 0
-            elif op == 'or':
-                return 1 if left or evaluate(node[3], env) else 0
-        elif node[0] == 'BITOP':
-            left = evaluate(node[2], env)
-            right = evaluate(node[3], env)
-            op = node[1]
-            if op == '&': return left & right
-            elif op == '|': return left | right
-            elif op == 'xor': return left ^ right
-    return 0
-
 def run(text):
     lexer = Lexer(text)
     parser = Parser(lexer)
@@ -895,7 +1069,7 @@ def run(text):
         env = {}
         ast = program
         for node in program:
-            evaluate(node, env)
+            node.eval(env)
         return {'success': True, 'env': env, 'ast': ast}
     except Exception as e:
         return {'success': False, 'error': str(e), 'ast': None}

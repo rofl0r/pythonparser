@@ -119,6 +119,13 @@ def test():
             "code": "var x: int = 10; var y: float = 4.0; var z := x / y;",
             "expected_env": {"x": 10, "y": 4.0, "z": 2.5}
         },
+        {
+            # Tests assignment as expression in while condition
+            "code": "var x := 10; var y := 0; while (y = y + 1) < 5 do x -= 1; end",
+            # y will end up as 5 (the condition becomes false when y = 5)
+            # x will be decremented 4 times (while y is 1,2,3,4)
+            "expected_env": {"x": 6, "y": 5}
+        },
     ]
     
     # Test cases that are expected to fail
