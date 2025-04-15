@@ -669,12 +669,26 @@ class Parser:
                 
                 # Parse the expression
                 expr = self.expression(0)
-                expr_type = expr[2] if len(expr) > 2 else TYPE_UNKNOWN
-                
+                # Extract type from expression - with special handling for binops
+                if expr[0] == 'BINOP':
+                    # For binary operations like y + 1, we need to use the result type at position 4
+                    expr_type = expr[4] if len(expr) > 4 else TYPE_INT
+                else:
+                    expr_type = expr[2] if len(expr) > 2 else TYPE_UNKNOWN
+
+                # For binary operations involving variables, make sure we have the correct type
+                if expr[0] == 'BINOP' and expr[2][0] == 'VAR':
+                    # Get the variable reference in the binop and its type
+                    binop_var_name = expr[2][1]
+                    binop_var_type = self.var_types.get(binop_var_name, TYPE_UNKNOWN)
+                    if binop_var_type != TYPE_UNKNOWN:
+                        # If the variable has a known type, use that to ensure consistency
+                        expr_type = TYPE_FLOAT if binop_var_type == TYPE_FLOAT else TYPE_INT
+
                 # We need to handle the case where the compiler doesn't have an updated
                 # type for the variable in the AST yet, so get the type from our type tracking
                 var_type = self.var_types.get(var, TYPE_UNKNOWN)
-                
+
                 # Check type compatibility for all assignments
                 self.check_type_compatibility(var, expr_type)
                 
