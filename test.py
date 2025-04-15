@@ -123,6 +123,126 @@ def test():
             # x will be decremented 4 times (while y is 1,2,3,4)
             "expected_env": {"x": 6, "y": 5}
         },
+        {
+           "name": "uint variable declaration and operations",
+           "code": """
+               var x : uint = 42;
+               var y := 10u;
+               var z : uint = x + y;
+               print z;
+               z = z / 2;
+               print z;
+               z = z * 3;
+               print z;
+           """,
+           "expected_env": {"x": 42, "y": 10, "z": 78}
+        },
+        {
+           "name": "long variable declaration and operations",
+           "code": """
+               var x : long = 42l;
+               var y := 10l;
+               var z : long = x + y;
+               print z;
+               z = z / 2;
+               print z;
+               z = z * 3;
+               print z;
+           """,
+           "expected_env": {"x": 42, "y": 10, "z": 78}
+        },
+        {
+           "name": "ulong variable declaration and operations",
+           "code": """
+               var x : ulong = 42ul;
+               var y := 10ul;
+               var z : ulong = x + y;
+               print z;
+               z = z / 2;
+               print z;
+               z = z * 3;
+               print z;
+           """,
+           "expected_env": {"x": 42, "y": 10, "z": 78}
+        },
+        {
+           "name": "mixed types variable declaration - type inference",
+           "code": """
+               var a := 42;     // int
+               var b := 42u;    // uint
+               var c := 42l;    // long
+               var d := 42ul;   // ulong
+               var e := 42.0;   // float
+               
+               // Test assignments to explicitly typed variables
+               var x : int = 10;
+               var y : uint = 20u;
+               var z : long = 30l;
+               var w : ulong = 40ul;
+               var v : float = 50.0;
+               
+               print a;
+               print b;
+               print c;
+               print d;
+               print e;
+           """,
+           "expected_env": {"a": 42, "b": 42, "c": 42, "d": 42, "e": 42.0,
+                        "x": 10, "y": 20, "z": 30, "w": 40, "v": 50.0}
+        },
+        {
+           "name": "unsigned int division",
+           "code": """
+               var x : uint = 10u;
+               var y : uint = 3u;
+               var z : uint = x / y;  // Should be 3 (truncated)
+               print z;
+           """,
+           "expected_env": {"x": 10, "y": 3, "z": 3}
+        },
+        {
+           "name": "signed division with negative numbers",
+           "code": """
+               var x : int = -10;
+               var y : int = 3;
+               var z : int = x / y;  // Should be -3 (truncated toward zero)
+               print z;
+               
+               var a : int = 10;
+               var b : int = -3;
+               var c : int = a / b;  // Should be -3
+               print c;
+               
+               var m : int = -10;
+               var n : int = -3;
+               var o : int = m / n;  // Should be 3
+               print o;
+           """,
+           "expected_env": {"x": -10, "y": 3, "z": -3, 
+                        "a": 10, "b": -3, "c": -3, 
+                        "m": -10, "n": -3, "o": 3}
+        },
+        {
+           "name": "assignment in expression-condition",
+           "code": """
+               var a : uint = 0u;
+               
+               if a = 5u do
+                   print a;
+               end
+               
+               var b : long = 0l;
+               if b = 10l do
+                   print b;
+               end
+               
+               var c : ulong = 0ul;
+               if c = 15ul do
+                   print c;
+               end
+           """,
+           "expected_env": {"a": 5, "b": 10, "c": 15}
+        },
 
         # Test cases that are expected to fail
         # Each has "code" and "expected_error"
@@ -213,7 +333,6 @@ def test():
             "code": "var x := 10; var y := 3.0; var z := x / y;", 
             "expected_error": "Type mismatch in binary operation"
         },
-        
     ]
 
     # List to track failing tests

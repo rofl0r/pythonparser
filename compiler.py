@@ -567,6 +567,17 @@ class Lexer:
     def skip_whitespace(self):
         while self.current_char and self.current_char.isspace():
             self.advance()
+    def skip_until(self, terminator):
+        """
+        Skip all characters until the terminator character is found or EOF.
+        Does NOT consume the terminator character itself.
+        Args:
+            terminator: The character to stop at
+        """
+        while self.current_char is not None and self.current_char != terminator:
+            self.advance()
+        # Note: At this point, current_char is either None (EOF) or the terminator character
+        # We don't advance further, leaving the terminator to be processed by other methods
 
     def number(self):
         """Parse a number (integer or float)"""
@@ -687,8 +698,14 @@ class Lexer:
 
     def handle_div(self):
         token = self.make_token(TT_DIV, '/')
-        self.advance()
-        if self.current_char == '=':
+        self.advance() # Skip the first '/'
+        # Handle C++-style comments
+        if self.current_char == '/':
+            # Skip first '/'
+            self.advance()  # Skip second '/'
+            self.skip_until('\n')  # Skip until end of line, but don't consume the newline
+            return self.next_token()  # Return the next token after the comment
+        elif self.current_char == '=':
             token.type = TT_DIV_ASSIGN
             token.value = '/='
             self.advance()
