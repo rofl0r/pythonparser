@@ -1,6 +1,5 @@
 # Token types
 TT_EOF = 0
-TT_NUMBER = 1
 TT_PLUS = 2
 TT_MINUS = 3
 TT_MULT = 4
@@ -40,9 +39,21 @@ TT_DIV_ASSIGN = 36
 TT_MOD_ASSIGN = 37
 TT_SHR = 38
 TT_SHL = 39
-# New token types for variable declarations
+# Variable declarations
 TT_VAR = 40
 TT_LET = 41
+# Type system additions
+TT_COLON = 42
+TT_TYPE_ASSIGN = 43  # :=
+TT_TYPE_INT = 44
+TT_TYPE_FLOAT = 45
+TT_INT_LITERAL = 46
+TT_FLOAT_LITERAL = 47
+
+# Variable types
+TYPE_UNKNOWN = 0
+TYPE_INT = 1
+TYPE_FLOAT = 2
 
 # Global hashtable for keywords
 KEYWORDS = {
@@ -60,9 +71,17 @@ KEYWORDS = {
     'bitnot': TT_BITNOT,
     'shl': TT_SHL,
     'shr': TT_SHR,
-    'var': TT_VAR,  # New keyword for variable declaration
-    'let': TT_LET,  # New keyword for constant declaration
+    'var': TT_VAR,  # Variable declaration
+    'let': TT_LET,  # Constant declaration
+    'int': TT_TYPE_INT,  # Int type
+    'float': TT_TYPE_FLOAT,  # Float type
 }
+
+def var_type_to_string(var_type):
+    """Convert a variable type constant to a string for error messages"""
+    if var_type == TYPE_INT: return "int"
+    if var_type == TYPE_FLOAT: return "float"
+    return "unknown"
 
 # Global precedence table for binary operators
 BINARY_PRECEDENCE = {
@@ -124,15 +143,17 @@ class Lexer:
             '<': self.handle_le,
             '&': self.handle_bitand,
             '|': self.handle_bitor,
+            ':': self.handle_colon,  # Added for type annotations
         }
 
     def make_token(self, token_type, value):
         """Helper to create a token with current line and column info"""
         return Token(token_type, value, self.line, self.column)
 
-    def error(self):
-        raise Exception('Invalid character at line %d, column %d: "%s"' %
-                       (self.line, self.column, self.current_char))
+    def error(self, message="Invalid character"):
+        raise Exception('%s at line %d, column %d: "%s"' %
+                       (message, self.line, self.column, self.current_char))
+                       
     def advance(self):
         # Update line and column tracking
         if self.current_char == '\n':
@@ -148,21 +169,49 @@ class Lexer:
             self.advance()
 
     def number(self):
+        """Parse a number (integer or float)"""
         start = self.pos
+        
+        # Track the start position for creating the token later
+        start_line = self.line
+        start_column = self.column
+        
+        # Read the first part of the number (digits before decimal point)
         while self.current_char and self.current_char.isdigit():
             self.advance()
-        return self.make_token(TT_NUMBER, int(self.text[start:self.pos]))
+            
+        # Check for decimal point
+        if self.current_char == '.':
+            self.advance()
+            
+            # For our restricted syntax, there MUST be at least one digit after the decimal
+            if not (self.current_char and self.current_char.isdigit()):
+                self.error("Invalid float literal: requires digits after decimal point")
+                
+            # Read digits after decimal point
+            while self.current_char and self.current_char.isdigit():
+                self.advance()
+            
+            # Create a float token
+            value_str = self.text[start:self.pos]
+            value = float(value_str)
+            return Token(TT_FLOAT_LITERAL, value, start_line, start_column)
+        else:
+            # Create an integer token
+            value_str = self.text[start:self.pos]
+            value = int(value_str)
+            return Token(TT_INT_LITERAL, value, start_line, start_column)
 
     def identifier(self):
         """Parse an identifier or keyword using the global KEYWORDS hashtable"""
         start = self.pos
         while self.current_char and (self.current_char.isalnum() or self.current_char == '_'):
             self.advance()
-        value = self.text[start:self.pos]
+        value_str = self.text[start:self.pos]
 
         # Look up in the global KEYWORDS hashtable, default to TT_IDENT if not found
-        token_type = KEYWORDS.get(value, TT_IDENT)
-        return self.make_token(token_type, value)
+        token_type = KEYWORDS.get(value_str, TT_IDENT)
+        return self.make_token(token_type, value_str)
 
     # Handlers for various operators
     def handle_plus(self):
@@ -272,6 +321,15 @@ class Lexer:
         self.advance()
         # No |= operator since we use keywords for bitwise operations
         return token
+        
+    def handle_colon(self):
+        token = self.make_token(TT_COLON, ':')
+        self.advance()
+        if self.current_char == '=':
+            token.type = TT_TYPE_ASSIGN
+            token.value = ':='
+            self.advance()
+        return token
 
     def next_token(self):
         while self.current_char:
@@ -309,7 +367,8 @@ class Parser:
         self.prev_token = None  # Previous token (for better error messages)
         self.variables = set()  # Track declared variables
         self.constants = set()  # Track constants (let declarations)
-
+        self.var_types = {}     # Track variable types
+        
     def error(self, message):
         token_type_name = token_name(self.token.type)
         raise Exception("%s at line %d, column %d. Token: %s (%s)" %
@@ -328,6 +387,7 @@ class Parser:
             actual_type_name = token_name(self.token.type)
             self.error('Expected %s but got %s' %
                        (expected_type_name, actual_type_name))
+                       
     def lbp(self, t):
         return BINARY_PRECEDENCE.get(t.type, 0)
 
@@ -341,22 +401,48 @@ class Parser:
             left = self.led(t, left)
         return left
 
+    def token_type_to_var_type(self, token_type):
+        """Convert token type to variable type"""
+        if token_type == TT_FLOAT_LITERAL:
+            return TYPE_FLOAT
+        return TYPE_INT
+
+    def check_type_compatibility(self, var_name, expr_type):
+        """Check if the expression's type is compatible with the variable's type"""
+        # Get variable type
+        var_type = self.var_types.get(var_name, TYPE_UNKNOWN)
+        
+        # Check type compatibility
+        if var_type != expr_type and var_type != TYPE_UNKNOWN and expr_type != TYPE_UNKNOWN:
+            self.error("Type mismatch: can't assign a value of type %s to %s (type %s)" % 
+                      (var_type_to_string(expr_type), var_name, var_type_to_string(var_type)))
+
     def nud(self, t):
-        if t.type == TT_NUMBER:
-            return ('NUM', t.value)
+        if t.type == TT_INT_LITERAL:
+            return ('NUM', t.value, TYPE_INT)
+        if t.type == TT_FLOAT_LITERAL:
+            return ('NUM', t.value, TYPE_FLOAT)
         if t.type == TT_IDENT:
             var_name = t.value
             # For a variable in an expression context:
             # Check if variable has been declared
             if var_name not in self.variables:
                 self.error("Variable '%s' is not declared" % var_name)
-            return ('VAR', var_name)
+                
+            # Get the variable type
+            var_type = self.var_types.get(var_name, TYPE_UNKNOWN)
+            return ('VAR', var_name, var_type)
+            
         if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
-            return ('UNARY', t.value, self.expression(UNARY_PRECEDENCE))
+            expr = self.expression(UNARY_PRECEDENCE)
+            expr_type = expr[2] if len(expr) > 2 else TYPE_INT
+            return ('UNARY', t.value, expr, expr_type)
+            
         if t.type == TT_LPAREN:
             expr = self.expression(0)
             self.consume(TT_RPAREN)
             return expr
+            
         raise Exception('Unexpected token type %d' % t.type)
 
     def led(self, t, left):
@@ -364,6 +450,7 @@ class Parser:
         if t.type == TT_ASSIGN and left[0] == 'VAR':
             # Get variable name from left side
             var_name = left[1]
+            var_type = left[2] if len(left) > 2 else TYPE_UNKNOWN
             
             # Check if variable is a constant (declared with 'let')
             if var_name in self.constants:
@@ -371,16 +458,55 @@ class Parser:
                 
             # Parse the right side expression
             right = self.expression(0)
-            return ('ASSIGN', var_name, right)
+            right_type = right[2] if len(right) > 2 else TYPE_UNKNOWN
+            
+            # Check type compatibility
+            self.check_type_compatibility(var_name, right_type)
+            
+            return ('ASSIGN', var_name, right, var_type)
+            
         if t.type in [TT_PLUS, TT_MINUS, TT_MULT, TT_DIV, TT_MOD, TT_SHL, TT_SHR]:
-            return ('BINOP', t.value, left, self.expression(self.lbp(t)))
+            right = self.expression(self.lbp(t))
+            
+            # Determine result type (float if either operand is float)
+            left_type = left[2] if len(left) > 2 else TYPE_INT
+            right_type = right[2] if len(right) > 2 else TYPE_INT
+            result_type = TYPE_FLOAT if (left_type == TYPE_FLOAT or right_type == TYPE_FLOAT) else TYPE_INT
+            
+            return ('BINOP', t.value, left, right, result_type)
+            
         elif t.type in [TT_EQ, TT_NE, TT_GE, TT_LE, TT_LT, TT_GT]:
-            return ('COMPARE', t.value, left, self.expression(self.lbp(t)))
+            right = self.expression(self.lbp(t))
+            # Comparisons always return an integer (0/1 representing false/true)
+            return ('COMPARE', t.value, left, right, TYPE_INT)
+            
         elif t.type in [TT_AND, TT_OR]:
-            return ('LOGICAL', t.value, left, self.expression(self.lbp(t)))
+            right = self.expression(self.lbp(t))
+            # Logical operations always return an integer (0/1 representing false/true)
+            return ('LOGICAL', t.value, left, right, TYPE_INT)
+            
         elif t.type in [TT_XOR, TT_BITOR, TT_BITAND]:
-            return ('BITOP', t.value, left, self.expression(self.lbp(t)))
+            right = self.expression(self.lbp(t))
+            # Bit operations are performed on integers and return integers
+            return ('BITOP', t.value, left, right, TYPE_INT)
+            
         raise Exception('Unexpected token type %d' % t.type)
+
+    def parse_type(self):
+        """Parse a type annotation or return None if not present"""
+        if self.token.type == TT_COLON:
+            self.advance()  # Consume the colon
+            
+            # After colon, we should have a type name
+            if self.token.type == TT_TYPE_INT:
+                self.advance()
+                return TYPE_INT
+            elif self.token.type == TT_TYPE_FLOAT:
+                self.advance()
+                return TYPE_FLOAT
+            else:
+                self.error("Expected type name after ':'")
+        return TYPE_UNKNOWN
 
     def statement(self):
         # Handle empty statements (lone semicolons)
@@ -400,24 +526,64 @@ class Parser:
             var_name = self.token.value
             self.advance()
             
-            # Expect an assignment for variable declaration (no bare declarations allowed)
-            if self.token.type != TT_ASSIGN:
-                self.error("Variable declaration must include an initialization")
-                
-            self.advance()  # Skip the = sign
+            # Process type annotation if present
+            var_type = self.parse_type()  # This will consume the type if present
             
-            # Parse the initializer expression
-            expr = self.expression(0)
+            # Check for assignment operator
+            if self.token.type == TT_TYPE_ASSIGN:
+                # Type inference assignment (:=)
+                self.advance()  # Skip the := operator
+                
+                # Parse the initializer expression
+                expr = self.expression(0)
+                
+                # Infer the type from expression
+                if expr[0] == 'NUM' and len(expr) > 2:
+                    var_type = expr[2]
+                elif expr[0] == 'VAR':
+                    # Get type from referenced variable
+                    ref_var = expr[1]
+                    var_type = self.var_types.get(ref_var, TYPE_UNKNOWN)
+                    if var_type == TYPE_UNKNOWN:
+                        self.error("Cannot infer type from variable '%s' with unknown type" % ref_var)
+                elif len(expr) > 3:  # Complex expressions might have type info at the end
+                    var_type = expr[-1] if isinstance(expr[-1], int) else TYPE_INT
+                else:
+                    # Default to int for other cases
+                    var_type = TYPE_INT
+                    
+            elif self.token.type == TT_ASSIGN:
+                # Regular assignment with explicit type (=)
+                if var_type == TYPE_UNKNOWN:
+                    self.error("Variable declaration with '=' requires explicit type annotation")
+                    
+                self.advance()  # Skip the = sign
+                
+                # Parse the initializer expression
+                expr = self.expression(0)
+                
+                # Check type compatibility
+                expr_type = expr[2] if len(expr) > 2 else TYPE_UNKNOWN
+                if expr_type != TYPE_UNKNOWN and var_type != expr_type:
+                    self.error("Type mismatch in initialization: can't assign %s to %s (type %s)" % 
+                              (var_type_to_string(expr_type), var_name, var_type_to_string(var_type)))
+                    
+            else:
+                self.error("Variable declaration must include an initialization")
             
             # Register the variable as defined
+            if var_name in self.variables:
+                self.error("Variable '%s' is already declared" % var_name)
+                
             self.variables.add(var_name)
+            self.var_types[var_name] = var_type
             
             # If this is a constant declaration (let), add it to constants set
             if decl_type == TT_LET:
                 self.constants.add(var_name)
                 
             self.check_statement_end()
-            return ('VAR_DECL', decl_type, var_name, expr)
+            return ('VAR_DECL', decl_type, var_name, var_type, expr)
             
         if self.token.type == TT_IF:
             self.advance()
@@ -482,25 +648,31 @@ class Parser:
                     
                 op = self.token.type
                 op_value = self.token.value
+                var_type = self.var_types.get(var, TYPE_UNKNOWN)
                 self.advance()
-                expr = self.expression(0) 
+                expr = self.expression(0)
+                expr_type = expr[2] if len(expr) > 2 else TYPE_UNKNOWN
+                
+                # Check type compatibility for all assignments
+                self.check_type_compatibility(var, expr_type)
                 
                 # For compound operators, we need to generate ("COMPOUND_ASSIGN", op_type, var, expr)
                 if op != TT_ASSIGN:
-                    self.check_statement_end("do")
-                    return ('COMPOUND_ASSIGN', op, var, expr)
+                    self.check_statement_end()
+                    return ('COMPOUND_ASSIGN', op, var, expr, var_type)
                     
                 # Regular assignment
-                self.check_statement_end("do")
-                return ('ASSIGN', var, expr)
+                self.check_statement_end()
+                return ('ASSIGN', var, expr, var_type)
             # Handle expression statements (e.g., an identifier by itself)
-            expr = ('VAR', var)
+            var_type = self.var_types.get(var, TYPE_UNKNOWN)
+            expr = ('VAR', var, var_type)
             self.check_statement_end()
             return ('EXPR_STMT', expr)
-        elif self.token.type in [TT_NUMBER, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
+        elif self.token.type in [TT_INT_LITERAL, TT_FLOAT_LITERAL, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
             # Also handle expressions that start with other tokens
             expr = self.expression(0)
-            self.check_statement_end("do")
+            self.check_statement_end()
             return ('EXPR_STMT', expr)
         token_type_name = token_name(self.token.type)
         self.error('Invalid statement starting with "%s" (%s)' %
@@ -533,7 +705,7 @@ def evaluate(node, env):
         if node[0] == 'EMPTY':
             return 0
         if node[0] == 'NUM':
-            return node[1]
+            return node[1]  # The value is at index 1, type at index 2
         elif node[0] == 'VAR':
             return env.get(node[1], 0)  # Default is 0 (parser ensures it exists)
         elif node[0] == 'BREAK':
@@ -541,19 +713,26 @@ def evaluate(node, env):
         elif node[0] == 'CONTINUE':
             raise ContinueException()
         elif node[0] == 'VAR_DECL':
-            # Variable declaration node: ('VAR_DECL', decl_type, var_name, expr)
+            # Variable declaration node: ('VAR_DECL', decl_type, var_name, var_type, expr)
             var_name = node[2]
-            value = evaluate(node[3], env)
+            value = evaluate(node[4], env)
             env[var_name] = value
             return value
         elif node[0] == 'BINOP':
-            left = evaluate(node[2], env)
-            right = evaluate(node[3], env)
+            left = evaluate(node[2], env)  # The left operand
+            right = evaluate(node[3], env)  # The right operand
             op = node[1]
+            result_type = node[4] if len(node) > 4 else TYPE_INT  # Get result type if available
+            
             if op == '+': return left + right
             elif op == '-': return left - right
             elif op == '*': return left * right
-            elif op == '/': return left // right if isinstance(left, int) else left / right  # Python 2 compatibility
+            elif op == '/': 
+                # Handle division based on result type
+                if result_type == TYPE_INT and isinstance(left, int) and isinstance(right, int):
+                    return left // right  # Integer division
+                else:
+                    return left / right  # Float division
             elif op == '%': return left % right
             elif op == 'shl': return left << right
             elif op == 'shr': return left >> right
@@ -584,13 +763,17 @@ def evaluate(node, env):
             elif op_type == TT_MULT_ASSIGN:
                 result = current_value * expr_value
             elif op_type == TT_DIV_ASSIGN:
-                # Handle integer division
-                result = current_value // expr_value if isinstance(current_value, int) else current_value / expr_value
+                # Handle division based on operand types
+                var_type = node[4] if len(node) > 4 else TYPE_UNKNOWN
+                if var_type == TYPE_INT and isinstance(current_value, int) and isinstance(expr_value, int):
+                    result = current_value // expr_value  # Integer division
+                else:
+                    result = current_value / expr_value  # Float division
             elif op_type == TT_MOD_ASSIGN:
                 result = current_value % expr_value
             else:
                 # This should never happen if parser is correct
-                raise Exception("Unknown compound assignment operator: %s"%token_name(op_type))
+                raise Exception("Unknown compound assignment operator: %s" % token_name(op_type))
                 
             # Store the result back in the variable and return it
             env[var] = result
