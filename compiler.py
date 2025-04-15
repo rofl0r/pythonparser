@@ -43,8 +43,8 @@ KEYWORDS = {
     'or': TT_OR,
     'do': TT_DO,
     'while': TT_WHILE,
-    'break' : TT_BREAK,
-    'continue' : TT_CONTINUE,
+    'break': TT_BREAK,
+    'continue': TT_CONTINUE,
 }
 
 # Global precedence table for binary operators
@@ -230,6 +230,15 @@ class Lexer:
 
         return Token(TT_EOF, None)
 
+# Custom exceptions for control flow
+class BreakException(Exception):
+    """Raised when a break statement is encountered"""
+    pass
+    
+class ContinueException(Exception):
+    """Raised when a continue statement is encountered"""
+    pass
+
 class Parser:
     def __init__(self, lexer):
         self.lexer = lexer
@@ -246,7 +255,8 @@ class Parser:
         if self.token.type == token_type:
             self.advance()
         else:
-            self.error('Expected token type %d' % token_type)
+            self.error('Expected token type %d but got %d (%s)' % 
+                      (token_type, self.token.type, self.token.value))
 
     def lbp(self, t):
         return BINARY_PRECEDENCE.get(t.type, 0)
@@ -354,6 +364,10 @@ def evaluate(node, env):
             return node[1]
         elif node[0] == 'VAR':
             return env.get(node[1], 0)  # Default is 0 (parser ensures it exists)
+        elif node[0] == 'BREAK':
+            raise BreakException()
+        elif node[0] == 'CONTINUE':
+            raise ContinueException()
         elif node[0] == 'BINOP':
             left = evaluate(node[2], env)
             right = evaluate(node[3], env)
@@ -386,19 +400,20 @@ def evaluate(node, env):
                 for stmt in node[3]:
                     evaluate(stmt, env)
         elif node[0] == 'WHILE':
-            # Add control flags for break and continue
-            control = {'break': False, 'continue': False}
             while evaluate(node[1], env):  # Evaluate condition
-                for stmt in node[2]:  # Execute body
-                    if stmt[0] == 'BREAK':
-                        control['break'] = True
-                        break
-                    if stmt[0] == 'CONTINUE':
-                        control['continue'] = True
-                        break
-                    evaluate(stmt, env)
-                if control['break']: break
-                if control['continue']: control['continue'] = False; continue
+                try:
+                    for stmt in node[2]:  # Execute body
+                        try:
+                            evaluate(stmt, env)
+                        except ContinueException:
+                            # Skip rest of current iteration
+                            break
+                        except BreakException:
+                            # Exit the loop completely
+                            raise
+                except BreakException:
+                    # Exit the loop
+                    break
             return 0
         elif node[0] == 'COMPARE':
             left = evaluate(node[2], env)
@@ -407,10 +422,9 @@ def evaluate(node, env):
             if op == '==': return 1 if left == right else 0
             elif op == '!=': return 1 if left != right else 0
             elif op == '>=': return 1 if left >= right else 0
-            elif op == '<=': return 1 if left <= right else 0
             elif op == '>': return 1 if left > right else 0
             elif op == '<': return 1 if left < right else 0
-
+            elif op == '<=': return 1 if left <= right else 0
         elif node[0] == 'LOGICAL':
             left = evaluate(node[2], env)
             op = node[1]
@@ -528,7 +542,7 @@ def test():
         },
         {
             "code": "x = 0; sum = 0; while x < 10 do x = x + 1; if x < 5 do continue; end if x > 8 do break; end sum = sum + x; end",
-            "expected_env": {"x": 9, "sum": 23}  # sum = 5+6+7+8+9 = 35
+            "expected_env": {"x": 9, "sum": 26}  # sum = 5+6+7+8 = 26
         },
     ]
 
