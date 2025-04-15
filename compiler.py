@@ -38,8 +38,8 @@ TT_MINUS_ASSIGN = 34
 TT_MULT_ASSIGN = 35
 TT_DIV_ASSIGN = 36
 TT_MOD_ASSIGN = 37
-TT_SHR = 38
-TT_SHL = 39
+TT_SHL = 38
+TT_SHR = 39
 # Variable declarations
 TT_VAR = 40
 TT_LET = 41
@@ -50,6 +50,12 @@ TT_TYPE_INT = 44
 TT_TYPE_FLOAT = 45
 TT_INT_LITERAL = 46
 TT_FLOAT_LITERAL = 47
+TT_TYPE_UINT = 48
+TT_TYPE_LONG = 49
+TT_TYPE_ULONG = 50
+TT_UINT_LITERAL = 51
+TT_LONG_LITERAL = 52
+TT_ULONG_LITERAL = 53
 
 # AST Node types (C-style enums)
 AST_NODE_BASE = 0
@@ -75,6 +81,27 @@ AST_NODE_BITOP = 17
 TYPE_UNKNOWN = 0
 TYPE_INT = 1
 TYPE_FLOAT = 2
+TYPE_UINT = 3
+TYPE_LONG = 4
+TYPE_ULONG = 5
+
+# Mapping from token types to variable types
+TOKEN_TO_TYPE_MAP = {
+    TT_INT_LITERAL: TYPE_INT,
+    TT_FLOAT_LITERAL: TYPE_FLOAT,
+    TT_UINT_LITERAL: TYPE_UINT,
+    TT_LONG_LITERAL: TYPE_LONG,
+    TT_ULONG_LITERAL: TYPE_ULONG
+}
+
+# Mapping from type tokens to variable types
+TYPE_TOKEN_MAP = {
+    TT_TYPE_INT: TYPE_INT,
+    TT_TYPE_FLOAT: TYPE_FLOAT,
+    TT_TYPE_UINT: TYPE_UINT,
+    TT_TYPE_LONG: TYPE_LONG,
+    TT_TYPE_ULONG: TYPE_ULONG
+}
 
 # Global hashtable for keywords
 KEYWORDS = {
@@ -96,12 +123,18 @@ KEYWORDS = {
     'let': TT_LET,  # Constant declaration
     'int': TT_TYPE_INT,  # Int type
     'float': TT_TYPE_FLOAT,  # Float type
+    'uint': TT_TYPE_UINT,  # Unsigned Int type
+    'long': TT_TYPE_LONG,  # Long type
+    'ulong': TT_TYPE_ULONG,  # Unsigned Long type
 }
 
 def var_type_to_string(var_type):
     """Convert a variable type constant to a string for error messages"""
     if var_type == TYPE_INT: return "int"
     if var_type == TYPE_FLOAT: return "float"
+    if var_type == TYPE_UINT: return "uint"
+    if var_type == TYPE_LONG: return "long"
+    if var_type == TYPE_ULONG: return "ulong"
     return "unknown"
 
 def ast_node_type_to_string(node_type):
@@ -154,6 +187,13 @@ BINARY_PRECEDENCE = {
 # Unary operator precedence (higher than binary operators)
 UNARY_PRECEDENCE = 100
 
+def token_name(token_type):
+    """Get string representation of token type"""
+    for name, val in globals().items():
+        if name.startswith('TT_') and val == token_type:
+            return name
+    return str(token_type)
+
 # Base class for all AST nodes
 class ASTNode(object):
     def __init__(self, node_type=AST_NODE_BASE):
@@ -166,7 +206,7 @@ class NumberNode(ASTNode):
     def __init__(self, value, expr_type):
         ASTNode.__init__(self, AST_NODE_NUMBER)
         self.value = value
-        self.expr_type = expr_type  # TYPE_INT or TYPE_FLOAT
+        self.expr_type = expr_type  # TYPE_INT, TYPE_FLOAT, TYPE_UINT, TYPE_LONG, TYPE_ULONG
 
     def eval(self, env):
         return self.value
@@ -201,7 +241,7 @@ class BinaryOpNode(ASTNode):
         elif self.operator == '*':
             return left_val * right_val
         elif self.operator == '/':
-            if self.expr_type == TYPE_INT:
+            if self.expr_type == TYPE_INT or self.expr_type == TYPE_UINT or self.expr_type == TYPE_LONG or self.expr_type == TYPE_ULONG:
                 return left_val // right_val  # Integer division
             else:
                 return left_val / right_val   # Float division
@@ -260,7 +300,7 @@ class CompoundAssignNode(ASTNode):
         elif self.op_type == TT_MULT_ASSIGN:
             result = current_value * expr_value
         elif self.op_type == TT_DIV_ASSIGN:
-            if self.expr_type == TYPE_INT:
+            if self.expr_type in [TYPE_INT, TYPE_UINT, TYPE_LONG, TYPE_ULONG]:
                 result = current_value // expr_value  # Integer division
             else:
                 result = current_value / expr_value   # Float division
@@ -488,8 +528,21 @@ class Lexer:
         # Read the first part of the number (digits before decimal point)
         while self.current_char and self.current_char.isdigit():
             self.advance()
+
+        # Check for suffix first (u, l, ul, lu) - needs to be checked before decimal point
+        if self.current_char in ['u', 'U', 'l', 'L']:
+            num_value = int(self.text[start:self.pos])
+            suffix = self.parse_int_suffix()
             
-        # Check for decimal point
+            # Create appropriate token based on suffix
+            if suffix == 'u': return Token(TT_UINT_LITERAL, num_value, start_line, start_column)
+            if suffix == 'l': return Token(TT_LONG_LITERAL, num_value, start_line, start_column)
+            if suffix in ['ul', 'lu']: return Token(TT_ULONG_LITERAL, num_value, start_line, start_column)
+            
+            # If we get here, an invalid suffix was used
+            self.error("Invalid integer literal suffix: '%s'" % suffix)
+         
+        # Check for decimal point (for float literals)
         if self.current_char == '.':
             self.advance()
             
@@ -511,8 +564,39 @@ class Lexer:
             value = int(value_str)
             return Token(TT_INT_LITERAL, value, start_line, start_column)
 
+    def parse_int_suffix(self):
+        """Parse integer literal suffixes (u, l, ul, lu)"""
+        suffix = ""
+        
+        # Read first character
+        if self.current_char in ['u', 'U']:
+            suffix += 'u'
+            self.advance()
+            # Check for 'l' or 'L' after 'u'
+            if self.current_char in ['l', 'L']:
+                suffix += 'l'
+                self.advance()
+        elif self.current_char in ['l', 'L']:
+            suffix += 'l'
+            self.advance()
+            # Check for 'u' or 'U' after 'l'
+            if self.current_char in ['u', 'U']:
+                suffix += 'u'
+                self.advance()
+        else:
+            self.error("Expected integer literal suffix")
+        
+        return suffix.lower()  # Normalize to lowercase
+
     def identifier(self):
-        """Parse an identifier or keyword using the global KEYWORDS hashtable"""
+        """
+        Parse an identifier or keyword using the global KEYWORDS hashtable.
+        
+        Valid identifiers start with a letter or underscore and can contain 
+        letters, digits, or underscores.
+        
+        Keywords are checked against the global KEYWORDS dictionary.
+        """
         start = self.pos
         while self.current_char and (self.current_char.isalnum() or self.current_char == '_'):
             self.advance()
@@ -681,7 +765,7 @@ class Parser:
     def error(self, message):
         token_type_name = token_name(self.token.type)
         raise Exception("%s at line %d, column %d. Token: %s (%s)" %
-                       (message, self.lexer.line, self.lexer.column,
+                       (message, self.token.line, self.token.column,
                         self.token.value, token_type_name))
 
     def advance(self):
@@ -712,9 +796,10 @@ class Parser:
 
     def token_type_to_var_type(self, token_type):
         """Convert token type to variable type"""
-        if token_type == TT_FLOAT_LITERAL:
-            return TYPE_FLOAT
-        return TYPE_INT
+        # Use the token-to-type mapping or raise an error for unknown types
+        if token_type not in TOKEN_TO_TYPE_MAP:
+            self.error("Unknown token type for variable type conversion: %s" % str(token_type))
+        return TOKEN_TO_TYPE_MAP[token_type]
 
     def check_type_compatibility(self, var_name, expr_type):
         """Check if the expression's type is compatible with the variable's type"""
@@ -733,12 +818,13 @@ class Parser:
         return left_type
 
     def nud(self, t):
-        if t.type == TT_INT_LITERAL:
-            return NumberNode(t.value, TYPE_INT)
-        if t.type == TT_FLOAT_LITERAL:
-            return NumberNode(t.value, TYPE_FLOAT)
+        # Handle number literals using the type mapping
+        if t.type in TOKEN_TO_TYPE_MAP:
+            return NumberNode(t.value, TOKEN_TO_TYPE_MAP[t.type])
+            
         if t.type == TT_IDENT:
             var_name = t.value
+            
             # For a variable in an expression context:
             # Check if variable has been declared
             if var_name not in self.variables:
@@ -793,7 +879,16 @@ class Parser:
                           (var_type_to_string(left.expr_type), var_type_to_string(right.expr_type)))
             
             # Determine result type based on operands
-            result_type = TYPE_FLOAT if left.expr_type == TYPE_FLOAT or right.expr_type == TYPE_FLOAT else TYPE_INT
+            if left.expr_type == TYPE_FLOAT or right.expr_type == TYPE_FLOAT:
+                result_type = TYPE_FLOAT
+            elif left.expr_type == TYPE_ULONG or right.expr_type == TYPE_ULONG:
+                result_type = TYPE_ULONG
+            elif left.expr_type == TYPE_LONG or right.expr_type == TYPE_LONG:
+                result_type = TYPE_LONG
+            elif left.expr_type == TYPE_UINT or right.expr_type == TYPE_UINT:
+                result_type = TYPE_UINT
+            else:
+                result_type = TYPE_INT
             
             return BinaryOpNode(t.value, left, right, result_type)
             
@@ -818,14 +913,12 @@ class Parser:
         """Parse a type annotation or return None if not present"""
         if self.token.type == TT_COLON:
             self.advance()  # Consume the colon
-            
-            # After colon, we should have a type name
-            if self.token.type == TT_TYPE_INT:
-                self.advance()
-                return TYPE_INT
-            elif self.token.type == TT_TYPE_FLOAT:
-                self.advance()
-                return TYPE_FLOAT
+
+            # Check if token is a valid type token
+            if self.token.type in TYPE_TOKEN_MAP:
+                var_type = TYPE_TOKEN_MAP[self.token.type]
+                self.advance()  # Consume the type token
+                return var_type
             else:
                 self.error("Expected type name after ':'")
         return TYPE_UNKNOWN
@@ -884,7 +977,7 @@ class Parser:
                 # Parse the initializer expression
                 expr = self.expression(0)
                 
-                # Check type compatibility
+                # Check type compatibility with expression type
                 if expr.expr_type != TYPE_UNKNOWN and var_type != expr.expr_type:
                     self.error("Type mismatch in initialization: can't assign %s to %s (type %s)" % 
                               (var_type_to_string(expr.expr_type), var_name, var_type_to_string(var_type)))
@@ -1006,7 +1099,8 @@ class Parser:
             expr = VariableNode(var, var_type)
             self.check_statement_end()
             return ExprStmtNode(expr)
-        elif self.token.type in [TT_INT_LITERAL, TT_FLOAT_LITERAL, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
+        elif self.token.type in [TT_INT_LITERAL, TT_UINT_LITERAL, TT_LONG_LITERAL, TT_ULONG_LITERAL, 
+                                TT_FLOAT_LITERAL, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
             # Also handle expressions that start with other tokens
             expr = self.expression(0)
             self.check_statement_end()
@@ -1036,22 +1130,41 @@ class Parser:
             statements.append(self.statement())
         return statements
 
-def run(text):
-    lexer = Lexer(text)
-    parser = Parser(lexer)
+def run(code):
+    """Runs the given code and returns a result dictionary"""
+    result = {'success': False, 'env': {}, 'error': None, 'ast': None}
     try:
-        program = parser.parse()
-        env = {}
-        ast = program
-        for node in program:
-            node.eval(env)
-        return {'success': True, 'env': env, 'ast': ast}
+        lexer = Lexer(code)
+        parser = Parser(lexer)
+        statements = parser.parse()
+        
+        env = {}  # Environment to store variable values during execution
+        for stmt in statements:
+            stmt.eval(env)
+        
+        result['success'] = True
+        result['env'] = env
     except Exception as e:
-        return {'success': False, 'error': str(e), 'ast': None}
+        result['error'] = str(e)
+        
+    return result
 
-# Define token type names for debugging
-TOKEN_NAMES = {v: k for k, v in globals().items() if k.startswith('TT_')}
-
-def token_name(token_type):
-    """Convert a token type number to its name for better debugging"""
-    return TOKEN_NAMES.get(token_type, str(token_type))
+# Main entry point for standalone execution
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) > 1:
+        with open(sys.argv[1], 'r') as f:
+            code = f.read()
+    else:
+        code = """
+        # Example code
+        var x := 42;
+        var y := 3.14;
+        print x + y;
+        """
+    result = run(code)
+    if result['success']:
+        print("Execution succeeded!")
+        print("Final environment:", result['env'])
+    else:
+        print("Error:", result['error'])
