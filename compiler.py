@@ -290,12 +290,19 @@ class Parser:
                 then_body.append(self.statement())
             if self.token.type == TT_ELSE:
                 self.advance()
-                self.consume(TT_DO)
-                else_body = []
-                while self.token.type != TT_END:
-                    else_body.append(self.statement())
-                self.consume(TT_END)
-                return ('IF', condition, then_body, else_body)
+                # Special case for "else if"
+                if self.token.type == TT_IF:
+                    # Parse the if statement directly as the else branch
+                    else_stmt = self.statement()
+                    return ('IF', condition, then_body, [else_stmt])
+                else:
+                    # Regular "else do...end" block
+                    self.consume(TT_DO)
+                    else_body = []
+                    while self.token.type != TT_END:
+                        else_body.append(self.statement())
+                    self.consume(TT_END)
+                    return ('IF', condition, then_body, else_body)
             self.consume(TT_END)
             return ('IF', condition, then_body, None)
         elif self.token.type == TT_PRINT:
