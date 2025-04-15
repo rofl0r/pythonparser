@@ -61,29 +61,29 @@ KEYWORDS = {
 
 # Global precedence table for binary operators
 BINARY_PRECEDENCE = {
-    TT_ASSIGN: 5, # lowest precedence
-    TT_OR: 10,
-    TT_AND: 20,
-    TT_BITOR: 30,
-    TT_XOR: 40,
-    TT_BITAND: 50,
-    TT_EQ: 60,
-    TT_NE: 60,
-    TT_GE: 60,
-    TT_GT: 60,
-    TT_LE: 60,
-    TT_LT: 60,
-    TT_PLUS: 70,
-    TT_MINUS: 70,
-    TT_SHL: 75,
-    TT_SHR: 75,
-    TT_MULT: 80,
-    TT_DIV: 80,
-    TT_MOD: 80,
+    TT_ASSIGN: 10,   # lowest precedence (Python: assignments)
+    TT_OR: 20,       # Python: Boolean OR
+    TT_AND: 30,      # Python: Boolean AND
+    TT_EQ: 40,       # Python: comparisons
+    TT_NE: 40,
+    TT_GE: 40,
+    TT_GT: 40,
+    TT_LE: 40,
+    TT_LT: 40,
+    TT_BITOR: 50,    # Python: bitwise OR
+    TT_XOR: 60,      # Python: bitwise XOR
+    TT_BITAND: 70,   # Python: bitwise AND
+    TT_PLUS: 80,     # Python: addition/subtraction
+    TT_MINUS: 80,
+    TT_MULT: 90,     # Python: multiplication/division/modulus/shift
+    TT_DIV: 90,
+    TT_MOD: 90,
+    TT_SHL: 90,      # Python: shift has same precedence as multiplication
+    TT_SHR: 90,
 }
 
 # Unary operator precedence (higher than binary operators)
-UNARY_PRECEDENCE = 90
+UNARY_PRECEDENCE = 100
 
 class Token:
     def __init__(self, type, value, line=0, column=0):
