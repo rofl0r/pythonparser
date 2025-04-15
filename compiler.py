@@ -421,6 +421,10 @@ def test():
         "x = 1; y = 1; z = 0; if x == 1 and y == 1 do print 1; end",
         "x = 1; y = 0; z = 1; if x == 0 or y == 1 or z == 1 do print 1; else do print 0; end",
         "x = 1; y = 1; if x == 1 and y == 0 or x == 0 and y == 1 do print 1; else do print 0; end",
+        "x = 3; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; end",
+        "x = 4; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; else do print 4; end",
+        "x = 1; y = 2; if x == 1 do if y == 1 do print 1; else if y == 2 do print 2; end else do print 0; end",
+        "x = 2; if x == 1 do print 1; else if x == 2 do if x == 2 do print 22; end else do print 3; end",
 
     ]
     
