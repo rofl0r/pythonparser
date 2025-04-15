@@ -89,6 +89,29 @@ TYPE_ULONG = 5
 # Order of type precedence (highest to lowest)
 TYPE_PRECEDENCE = [TYPE_FLOAT, TYPE_ULONG, TYPE_LONG, TYPE_UINT, TYPE_INT]
 
+# Type promotion helper functions
+def can_promote(src_type, dst_type):
+    """
+    Determine if a value of src_type can be promoted to dst_type
+    Rules:
+    1. Any type can be promoted to itself
+    2. Any integer literal (TYPE_INT) can be promoted to any type during declaration
+    3. For other cases, follow type precedence rules
+    """
+    # Same type - always compatible
+    if src_type == dst_type:
+        return True
+    
+    # Int literal special case - can promote to any other type 
+    # This allows writing var x:uint = 42; without having to add the 'u' suffix
+    if src_type == TYPE_INT:
+        return True
+        
+    # For other types, only allow promotion to higher precedence types
+    src_prec = TYPE_PRECEDENCE.index(src_type) if src_type in TYPE_PRECEDENCE else -1
+    dst_prec = TYPE_PRECEDENCE.index(dst_type) if dst_type in TYPE_PRECEDENCE else -1
+    return src_prec > dst_prec  # Lower index = higher precedence
+
 # Mapping from type constants to their string representations
 TYPE_TO_STRING_MAP = {
     TYPE_UNKNOWN: "unknown",
@@ -196,6 +219,15 @@ BINARY_PRECEDENCE = {
 # Unary operator precedence (higher than binary operators)
 UNARY_PRECEDENCE = 100
 
+# Helper function for promoting literal values
+def promote_literal_if_needed(value, from_type, to_type):
+    """Promote a literal value if needed between compatible types"""
+    if from_type != to_type and can_promote(from_type, to_type):
+        # Most numeric promotions don't require value changes in Python
+        # But certain conversions might need special handling in the future
+        return value
+    return value
+
 # Base class for all AST nodes
 class ASTNode(object):
     def __init__(self, node_type=AST_NODE_BASE):
@@ -274,9 +306,19 @@ class AssignNode(ASTNode):
         self.var_name = var_name
         self.expr = expr
         self.expr_type = var_type
-
+        
     def eval(self, env):
         value = self.expr.eval(env)
+        
+        # Check if type promotion is needed and allowed
+        if self.expr_type != self.expr.expr_type:
+            if not can_promote(self.expr.expr_type, self.expr_type):
+                raise TypeError("Cannot assign %s to %s"%(var_type_to_string(self.expr.expr_type), var_type_to_string(self.expr_type)))
+                
+        # Handle number literal promotion
+        if self.expr.node_type == AST_NODE_NUMBER:
+            value = promote_literal_if_needed(value, self.expr.expr_type, self.expr_type)
+        
         env[self.var_name] = value
         return value
 
@@ -385,6 +427,18 @@ class VarDeclNode(ASTNode):
 
     def eval(self, env):
         value = self.expr.eval(env)
+        
+        # Check if type promotion is needed and allowed
+        if self.var_type != self.expr.expr_type:
+            if not can_promote(self.expr.expr_type, self.var_type):
+                raise TypeError("Cannot assign %s to %s"%(var_type_to_string(self.expr.expr_type), var_type_to_string(self.var_type)))
+
+        # For variable declarations, literals get special treatment
+        # This supports writing code like: var x:uint = 42; (without 'u' suffix)
+        if self.expr.node_type == AST_NODE_NUMBER:
+            # No actual value transformation needed for most numeric types
+            pass
+        
         env[self.var_name] = value
         return value
 
@@ -802,11 +856,11 @@ class Parser:
         """Check if the expression's type is compatible with the variable's type"""
         # Get variable type
         var_type = self.var_types.get(var_name)
-        
-        # Only check compatibility when both types are known
-        if var_type is not None and var_type != TYPE_UNKNOWN and expr_type != TYPE_UNKNOWN and var_type != expr_type:
-            self.error("Type mismatch: can't assign a value of type %s to %s (type %s)" %
-                      (var_type_to_string(expr_type), var_name, var_type_to_string(var_type)))
+
+        # Check compatibility using can_promote function
+        if var_type is not None and var_type != TYPE_UNKNOWN and expr_type != TYPE_UNKNOWN and not can_promote(expr_type, var_type):
+            self.error("Type mismatch: can't assign a value of type %s to %s (type %s)" % 
+                       (var_type_to_string(expr_type), var_name, var_type_to_string(var_type)))
 
     def determine_result_type(self, left_type, right_type):
         """Determine the result type of a binary operation based on operand types"""
@@ -974,7 +1028,7 @@ class Parser:
                 expr = self.expression(0)
                 
                 # Check type compatibility with expression type
-                if expr.expr_type != TYPE_UNKNOWN and var_type != expr.expr_type:
+                if expr.expr_type != TYPE_UNKNOWN and var_type != expr.expr_type and not can_promote(expr.expr_type, var_type):
                     self.error("Type mismatch in initialization: can't assign %s to %s (type %s)" % 
                               (var_type_to_string(expr.expr_type), var_name, var_type_to_string(var_type)))
                     
