@@ -289,3 +289,8 @@ def token_name(token_type):
     """Convert a token type number to its name for better debugging"""
     return TOKEN_NAMES.get(token_type, str(token_type))
 
+# Base class for all compiler-defined exceptions
+class CompilerException(Exception):
+    """Base class for all exceptions raised by the compiler"""
+    pass
+

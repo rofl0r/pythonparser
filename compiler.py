@@ -328,7 +328,7 @@ class Lexer:
         return Token(token_type, value, self.line, self.column)
 
     def error(self, message="Invalid character"):
-        raise Exception('%s at line %d, column %d: "%s"' %
+        raise CompilerException('%s at line %d, column %d: "%s"' %
                        (message, self.line, self.column, self.current_char))
                        
     def advance(self):
@@ -609,7 +609,7 @@ class Parser:
         
     def error(self, message):
         token_type_name = token_name(self.token.type)
-        raise Exception("%s at line %d, column %d. Token: %s (%s)" %
+        raise CompilerException("%s at line %d, column %d. Token: %s (%s)" %
                        (message, self.token.line, self.token.column,
                         self.token.value, token_type_name))
 
@@ -688,7 +688,7 @@ class Parser:
             self.consume(TT_RPAREN)
             return expr
             
-        raise Exception('Unexpected token type %d' % t.type)
+        raise CompilerException('Unexpected token type %d' % t.type)
 
     def led(self, t, left):
         # Handle assignment as an operator
@@ -719,8 +719,8 @@ class Parser:
             right = self.expression(self.lbp(t))
             
             # If types don't match, we need to fail
-            if left.expr_type != right.expr_type and left.expr_type != TYPE_UNKNOWN and right.expr_type != TYPE_UNKNOWN:
-                self.error("Type mismatch in binary operation: %s and %s" % 
+            if left.expr_type != right.expr_type and left.expr_type != TYPE_UNKNOWN and right.expr_type != TYPE_UNKNOWN and not can_promote(right.expr_type, left.expr_type):
+                self.error("Type mismatch in binary operation: %s and %s" %
                           (var_type_to_string(left.expr_type), var_type_to_string(right.expr_type)))
             
             # Determine result type based on operands using the TYPE_PRECEDENCE list
@@ -751,7 +751,7 @@ class Parser:
             # Bit operations are performed on integers and return integers
             return BitOpNode(t.value, left, right)
             
-        raise Exception('Unexpected token type %d' % t.type)
+        raise CompilerException('Unexpected token type %d' % t.type)
 
     def parse_type(self):
         """Parse a type annotation or return None if not present"""
@@ -984,6 +984,6 @@ def run(text):
         for node in program:
             node.eval(env)
         return {'success': True, 'env': env, 'ast': ast}
-    except Exception as e:
+    except CompilerException as e:
         return {'success': False, 'error': str(e), 'ast': None}
 
