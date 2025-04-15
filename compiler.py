@@ -28,6 +28,8 @@ TT_BITNOT = 25
 TT_XOR = 26
 TT_DO = 27
 TT_WHILE = 28
+TT_LT = 29
+TT_GT = 30
 
 # Global hashtable for keywords
 KEYWORDS = {
@@ -51,7 +53,9 @@ BINARY_PRECEDENCE = {
     TT_EQ: 60,
     TT_NE: 60,
     TT_GE: 60,
+    TT_GT: 60,
     TT_LE: 60,
+    TT_LT: 60,
     TT_PLUS: 70,
     TT_MINUS: 70,
     TT_MULT: 80,
@@ -86,7 +90,6 @@ class Lexer:
             '(': self.handle_lparen,
             ')': self.handle_rparen,
             ';': self.handle_semi,
-            # ':': self.handle_colon,  # Removed colon handler
             '=': self.handle_assign_or_eq,
             '!': self.handle_not_or_ne,
             '>': self.handle_ge,
@@ -98,7 +101,8 @@ class Lexer:
         }
 
     def error(self):
-        raise Exception('Invalid character')
+        raise Exception('Invalid character at position %d: "%s"' %
+                       (self.pos, self.current_char))
 
     def advance(self):
         self.pos += 1
@@ -158,8 +162,6 @@ class Lexer:
         self.advance()
         return Token(TT_SEMI, ';')
 
-    # Removed handle_colon method
-
     def handle_assign_or_eq(self):
         self.advance()
         if self.current_char == '=':
@@ -179,14 +181,14 @@ class Lexer:
         if self.current_char == '=':
             self.advance()
             return Token(TT_GE, '>=')
-        self.error()
+        return Token(TT_GT, '>')
 
     def handle_le(self):
         self.advance()
         if self.current_char == '=':
             self.advance()
             return Token(TT_LE, '<=')
-        self.error()
+        return Token(TT_LT, '<')
 
     def handle_bitand(self):
         self.advance()
@@ -410,11 +412,12 @@ def run(text):
     try:
         program = parser.parse()
         env = {}
+        ast = program
         for node in program:
             evaluate(node, env)
-        return {'success': True, 'env': env}
+        return {'success': True, 'env': env, 'ast': ast}
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        return {'success': False, 'error': str(e), 'ast': None}
 
 def should_fail(text):
     """Run code that is expected to fail and return True if it does"""
@@ -523,7 +526,9 @@ def test():
                 print("  Actual env: %s" % result['env'])
         else:
             print("Failed! Error: %s" % result['error'])
-    
+            if result.get('ast'):
+                print("AST dump: %s" % result['ast'])
+
     # Run test cases expected to fail
     for i, test_case in enumerate(fail_test_cases):
         print("\nFail Test %d:" % (i + 1))
@@ -533,6 +538,16 @@ def test():
             print("Successfully failed with error: %s" % result['error'])
         else:
             print("Test didn't fail as expected! Result: %s" % result)
+            # Add AST dump for unexpected failures
+            if result.get('ast'):
+                print("AST dump: %s" % result['ast'])
+
+# Define token type names for debugging
+TOKEN_NAMES = {v: k for k, v in globals().items() if k.startswith('TT_')}
+
+def token_name(token_type):
+    """Convert a token type number to its name for better debugging"""
+    return TOKEN_NAMES.get(token_type, str(token_type))
 
 if __name__ == '__main__':
     test()
