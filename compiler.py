@@ -156,16 +156,15 @@ UNARY_PRECEDENCE = 100
 
 # Base class for all AST nodes
 class ASTNode(object):
-    def __init__(self):
-        self.node_type = AST_NODE_BASE
+    def __init__(self, node_type=AST_NODE_BASE):
+        self.node_type = node_type
 
     def eval(self, env):
         raise NotImplementedError("Evaluation not implemented for this node")
 
 class NumberNode(ASTNode):
     def __init__(self, value, expr_type):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_NUMBER
+        ASTNode.__init__(self, AST_NODE_NUMBER)
         self.value = value
         self.expr_type = expr_type  # TYPE_INT or TYPE_FLOAT
 
@@ -174,8 +173,7 @@ class NumberNode(ASTNode):
 
 class VariableNode(ASTNode):
     def __init__(self, name, var_type):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_VARIABLE
+        ASTNode.__init__(self, AST_NODE_VARIABLE)
         self.name = name
         self.expr_type = var_type
 
@@ -186,8 +184,7 @@ class VariableNode(ASTNode):
 
 class BinaryOpNode(ASTNode):
     def __init__(self, operator, left, right, result_type):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_BINARY_OP
+        ASTNode.__init__(self, AST_NODE_BINARY_OP)
         self.operator = operator
         self.left = left
         self.right = right
@@ -217,8 +214,7 @@ class BinaryOpNode(ASTNode):
 
 class UnaryOpNode(ASTNode):
     def __init__(self, operator, operand, result_type):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_UNARY_OP
+        ASTNode.__init__(self, AST_NODE_UNARY_OP)
         self.operator = operator
         self.operand = operand
         self.expr_type = result_type
@@ -235,8 +231,7 @@ class UnaryOpNode(ASTNode):
 
 class AssignNode(ASTNode):
     def __init__(self, var_name, expr, var_type):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_ASSIGN
+        ASTNode.__init__(self, AST_NODE_ASSIGN)
         self.var_name = var_name
         self.expr = expr
         self.expr_type = var_type
@@ -248,8 +243,7 @@ class AssignNode(ASTNode):
 
 class CompoundAssignNode(ASTNode):
     def __init__(self, op_type, var_name, expr, var_type):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_COMPOUND_ASSIGN
+        ASTNode.__init__(self, AST_NODE_COMPOUND_ASSIGN)
         self.op_type = op_type
         self.var_name = var_name
         self.expr = expr
@@ -278,8 +272,7 @@ class CompoundAssignNode(ASTNode):
 
 class PrintNode(ASTNode):
     def __init__(self, expr):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_PRINT
+        ASTNode.__init__(self, AST_NODE_PRINT)
         self.expr = expr
 
     def eval(self, env):
@@ -289,8 +282,7 @@ class PrintNode(ASTNode):
 
 class IfNode(ASTNode):
     def __init__(self, condition, then_body, else_body=None):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_IF
+        ASTNode.__init__(self, AST_NODE_IF)
         self.condition = condition
         self.then_body = then_body  # List of statement nodes
         self.else_body = else_body  # List of statement nodes or None
@@ -306,8 +298,7 @@ class IfNode(ASTNode):
 
 class WhileNode(ASTNode):
     def __init__(self, condition, body):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_WHILE
+        ASTNode.__init__(self, AST_NODE_WHILE)
         self.condition = condition
         self.body = body  # List of statement nodes
 
@@ -327,24 +318,21 @@ class WhileNode(ASTNode):
 
 class BreakNode(ASTNode):
     def __init__(self):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_BREAK
+        ASTNode.__init__(self, AST_NODE_BREAK)
 
     def eval(self, env):
         raise BreakException()
 
 class ContinueNode(ASTNode):
     def __init__(self):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_CONTINUE
+        ASTNode.__init__(self, AST_NODE_CONTINUE)
 
     def eval(self, env):
         raise ContinueException()
 
 class ExprStmtNode(ASTNode):
     def __init__(self, expr):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_EXPR_STMT
+        ASTNode.__init__(self, AST_NODE_EXPR_STMT)
         self.expr = expr
 
     def eval(self, env):
@@ -352,8 +340,7 @@ class ExprStmtNode(ASTNode):
 
 class VarDeclNode(ASTNode):
     def __init__(self, decl_type, var_name, var_type, expr):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_VAR_DECL
+        ASTNode.__init__(self, AST_NODE_VAR_DECL)
         self.decl_type = decl_type
         self.var_name = var_name
         self.var_type = var_type
@@ -366,16 +353,14 @@ class VarDeclNode(ASTNode):
 
 class EmptyNode(ASTNode):
     def __init__(self):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_EMPTY
+        ASTNode.__init__(self, AST_NODE_EMPTY)
 
     def eval(self, env):
         return 0
 
 class CompareNode(ASTNode):
     def __init__(self, operator, left, right):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_COMPARE
+        ASTNode.__init__(self, AST_NODE_COMPARE)
         self.operator = operator
         self.left = left
         self.right = right
@@ -400,8 +385,7 @@ class CompareNode(ASTNode):
 
 class LogicalNode(ASTNode):
     def __init__(self, operator, left, right):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_LOGICAL
+        ASTNode.__init__(self, AST_NODE_LOGICAL)
         self.operator = operator
         self.left = left
         self.right = right
@@ -417,8 +401,7 @@ class LogicalNode(ASTNode):
 
 class BitOpNode(ASTNode):
     def __init__(self, operator, left, right):
-        ASTNode.__init__(self)
-        self.node_type = AST_NODE_BITOP
+        ASTNode.__init__(self, AST_NODE_BITOP)
         self.operator = operator
         self.left = left
         self.right = right
@@ -767,8 +750,7 @@ class Parser:
             
         if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
             expr = self.expression(UNARY_PRECEDENCE)
-            expr_type = expr.expr_type if hasattr(expr, 'expr_type') else TYPE_INT
-            return UnaryOpNode(t.value, expr, expr_type)
+            return UnaryOpNode(t.value, expr, expr.expr_type)
             
         if t.type == TT_LPAREN:
             expr = self.expression(0)
@@ -790,31 +772,28 @@ class Parser:
                 
             # Parse the right side expression
             right = self.expression(0)
-            right_type = right.expr_type if hasattr(right, 'expr_type') else TYPE_UNKNOWN
             
             # For assignments in conditions (e.g. while x = y do),
             # use the fully resolved types
             if right.node_type == AST_NODE_VARIABLE:
                 right_var = right.name
-                right_type = self.var_types.get(right_var, right_type)
+                right_type = self.var_types.get(right_var, right.expr_type)
             
             # Check type compatibility
-            self.check_type_compatibility(var_name, right_type)
+            self.check_type_compatibility(var_name, right.expr_type)
             
             return AssignNode(var_name, right, var_type)
             
         if t.type in [TT_PLUS, TT_MINUS, TT_MULT, TT_DIV, TT_MOD, TT_SHL, TT_SHR]:
             right = self.expression(self.lbp(t))
             
-            # Determine result type (float if either operand is float)
-            left_type = left.expr_type if hasattr(left, 'expr_type') else TYPE_INT
-            right_type = right.expr_type if hasattr(right, 'expr_type') else TYPE_INT
-            
             # If types don't match, we need to fail
-            if left_type != right_type and left_type != TYPE_UNKNOWN and right_type != TYPE_UNKNOWN:
-                self.error("Type mismatch in binary operation: %s and %s"%(var_type_to_string(left_type), var_type_to_string(right_type)))
-                
-            result_type = TYPE_FLOAT if left_type == TYPE_FLOAT else TYPE_INT
+            if left.expr_type != right.expr_type and left.expr_type != TYPE_UNKNOWN and right.expr_type != TYPE_UNKNOWN:
+                self.error("Type mismatch in binary operation: %s and %s" % 
+                          (var_type_to_string(left.expr_type), var_type_to_string(right.expr_type)))
+            
+            # Determine result type based on operands
+            result_type = TYPE_FLOAT if left.expr_type == TYPE_FLOAT or right.expr_type == TYPE_FLOAT else TYPE_INT
             
             return BinaryOpNode(t.value, left, right, result_type)
             
@@ -906,10 +885,9 @@ class Parser:
                 expr = self.expression(0)
                 
                 # Check type compatibility
-                expr_type = expr.expr_type if hasattr(expr, 'expr_type') else TYPE_UNKNOWN
-                if expr_type != TYPE_UNKNOWN and var_type != expr_type:
+                if expr.expr_type != TYPE_UNKNOWN and var_type != expr.expr_type:
                     self.error("Type mismatch in initialization: can't assign %s to %s (type %s)" % 
-                              (var_type_to_string(expr_type), var_name, var_type_to_string(var_type)))
+                              (var_type_to_string(expr.expr_type), var_name, var_type_to_string(var_type)))
                     
             else:
                 self.error("Variable declaration must include an initialization")
@@ -1012,11 +990,8 @@ class Parser:
                 # Parse the expression
                 expr = self.expression(0)
                 
-                # Get type from expression
-                expr_type = expr.expr_type if hasattr(expr, 'expr_type') else TYPE_UNKNOWN
-                
                 # Check type compatibility for all assignments
-                self.check_type_compatibility(var, expr_type)
+                self.check_type_compatibility(var, expr.expr_type)
                 
                 # For compound operators, use CompoundAssignNode
                 if op != TT_ASSIGN:
