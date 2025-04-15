@@ -30,6 +30,8 @@ TT_DO = 27
 TT_WHILE = 28
 TT_LT = 29
 TT_GT = 30
+TT_BREAK = 31
+TT_CONTINUE = 32
 
 # Global hashtable for keywords
 KEYWORDS = {
@@ -41,6 +43,8 @@ KEYWORDS = {
     'or': TT_OR,
     'do': TT_DO,
     'while': TT_WHILE,
+    'break' : TT_BREAK,
+    'continue' : TT_CONTINUE,
 }
 
 # Global precedence table for binary operators
@@ -323,6 +327,10 @@ class Parser:
             expr = self.expression(0)
             self.consume(TT_SEMI)
             return ('PRINT', expr)
+        elif self.token.type == TT_BREAK:
+            self.advance(); self.consume(TT_SEMI); return ('BREAK',)
+        elif self.token.type == TT_CONTINUE:
+            self.advance(); self.consume(TT_SEMI); return ('CONTINUE',)
         elif self.token.type == TT_IDENT:
             var = self.token.value
             self.advance()
@@ -378,9 +386,19 @@ def evaluate(node, env):
                 for stmt in node[3]:
                     evaluate(stmt, env)
         elif node[0] == 'WHILE':
+            # Add control flags for break and continue
+            control = {'break': False, 'continue': False}
             while evaluate(node[1], env):  # Evaluate condition
                 for stmt in node[2]:  # Execute body
+                    if stmt[0] == 'BREAK':
+                        control['break'] = True
+                        break
+                    if stmt[0] == 'CONTINUE':
+                        control['continue'] = True
+                        break
                     evaluate(stmt, env)
+                if control['break']: break
+                if control['continue']: control['continue'] = False; continue
             return 0
         elif node[0] == 'COMPARE':
             left = evaluate(node[2], env)
@@ -489,9 +507,31 @@ def test():
         {
             "code": "x = 1; y = 1; while x < 10 do x = x * 2; y = y + x; end",
             "expected_env": {"x": 16, "y": 31}  # y = 1+2 + 2+4 + 6+8 + 14+16 = 31
-         },
+        },
+        # Break statement tests
+        {
+            "code": "x = 0; while x < 10 do x = x + 1; if x == 5 do break; end end",
+            "expected_env": {"x": 5}
+        },
+        {
+            "code": "sum = 0; x = 0; while x < 10 do x = x + 1; if x > 5 do break; end sum = sum + x; end",
+            "expected_env": {"sum": 15, "x": 6}  # sum = 1+2+3+4+5 = 15
+        },
+        # Continue statement tests
+        {
+            "code": "sum = 0; x = 0; while x < 5 do x = x + 1; if x == 3 do continue; end sum = sum + x; end",
+            "expected_env": {"sum": 12, "x": 5}  # sum = 1+2+4+5 = 12 (3 is skipped)
+        },
+        {
+            "code": "evens = 0; x = 0; while x < 10 do x = x + 1; if x % 2 != 0 do continue; end evens = evens + x; end",
+            "expected_env": {"evens": 30, "x": 10}  # evens = 2+4+6+8+10 = 30
+        },
+        {
+            "code": "x = 0; sum = 0; while x < 10 do x = x + 1; if x < 5 do continue; end if x > 8 do break; end sum = sum + x; end",
+            "expected_env": {"x": 9, "sum": 23}  # sum = 5+6+7+8+9 = 35
+        },
     ]
-    
+
     # Test cases that are expected to fail
     fail_test_cases = [
         {
