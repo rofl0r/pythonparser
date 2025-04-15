@@ -88,6 +88,16 @@ TYPE_ULONG = 5
 # Order of type precedence (highest to lowest)
 TYPE_PRECEDENCE = [TYPE_FLOAT, TYPE_ULONG, TYPE_LONG, TYPE_UINT, TYPE_INT]
 
+# Mapping from type constants to their string representations
+TYPE_TO_STRING_MAP = {
+    TYPE_UNKNOWN: "unknown",
+    TYPE_INT: "int",
+    TYPE_FLOAT: "float",
+    TYPE_UINT: "uint",
+    TYPE_LONG: "long",
+    TYPE_ULONG: "ulong"
+}
+
 # Mapping from token types to variable types
 TOKEN_TO_TYPE_MAP = {
     TT_INT_LITERAL: TYPE_INT,
@@ -132,13 +142,8 @@ KEYWORDS = {
 }
 
 def var_type_to_string(var_type):
-    """Convert a variable type constant to a string for error messages"""
-    if var_type == TYPE_INT: return "int"
-    if var_type == TYPE_FLOAT: return "float"
-    if var_type == TYPE_UINT: return "uint"
-    if var_type == TYPE_LONG: return "long"
-    if var_type == TYPE_ULONG: return "ulong"
-    return "unknown"
+    """Convert a variable type constant to a string for error messages using the map"""
+    return TYPE_TO_STRING_MAP.get(var_type, "unknown")
 
 def ast_node_type_to_string(node_type):
     """Convert AST node type to string for debugging"""
