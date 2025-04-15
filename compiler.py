@@ -1,3 +1,4 @@
+# Implementation of a Pratt parser in Python 2.7
 # Token types
 TT_EOF = 0
 TT_PLUS = 2
@@ -410,11 +411,11 @@ class Parser:
     def check_type_compatibility(self, var_name, expr_type):
         """Check if the expression's type is compatible with the variable's type"""
         # Get variable type
-        var_type = self.var_types.get(var_name, TYPE_UNKNOWN)
+        var_type = self.var_types.get(var_name)
         
-        # Check type compatibility
-        if var_type != expr_type and var_type != TYPE_UNKNOWN and expr_type != TYPE_UNKNOWN:
-            self.error("Type mismatch: can't assign a value of type %s to %s (type %s)" % 
+        # Only check compatibility when both types are known
+        if var_type is not None and var_type != TYPE_UNKNOWN and expr_type != TYPE_UNKNOWN and var_type != expr_type:
+            self.error("Type mismatch: can't assign a value of type %s to %s (type %s)" %
                       (var_type_to_string(expr_type), var_name, var_type_to_string(var_type)))
 
     def nud(self, t):
@@ -483,7 +484,7 @@ class Parser:
             right = self.expression(self.lbp(t))
             
             # Determine result type (float if either operand is float)
-            left_type = left[2] if len(left) > 2 else TYPE_INT
+            left_type = left[2] if len(left) > 2 else TYPE_INT 
             right_type = right[2] if len(right) > 2 else TYPE_INT
             result_type = TYPE_FLOAT if (left_type == TYPE_FLOAT or right_type == TYPE_FLOAT) else TYPE_INT
             
@@ -605,24 +606,37 @@ class Parser:
             self.consume(TT_DO)
             then_body = []
             while self.token.type not in [TT_ELSE, TT_END]:
-                then_body.append(self.statement())
-            if self.token.type == TT_ELSE:
+                stmt = self.statement()
+                then_body.append(stmt)
+            
+            # Handle regular if-end or if-end else
+            if self.token.type == TT_END:
                 self.advance()
-                # Special case for "else if"
-                if self.token.type == TT_IF:
-                    # Parse the if statement directly as the else branch
-                    else_stmt = self.statement()
-                    return ('IF', condition, then_body, [else_stmt])
-                else:
-                    # Regular "else do...end" block
-                    self.consume(TT_DO)
+                # Check for else after end
+                if self.token.type == TT_ELSE:
+                    self.advance()
                     else_body = []
-                    while self.token.type != TT_END:
+                    
+                    # Handle both "else if" and "else do" cases
+                    if self.token.type == TT_IF:
+                        # Parse the nested if as part of else body
                         else_body.append(self.statement())
-                    self.consume(TT_END)
+                    elif self.token.type == TT_DO:
+                        # Regular else do...end block
+                        self.advance()  # Consume the DO
+                        while self.token.type != TT_END:
+                            else_body.append(self.statement())
+                        self.consume(TT_END)
+                    else:
+                        self.error("Expected 'if' or 'do' after 'else'")
+                    
                     return ('IF', condition, then_body, else_body)
-            self.consume(TT_END)
-            return ('IF', condition, then_body, None)
+                return ('IF', condition, then_body, None)
+            else:
+                # We found ELSE without END - error
+                self.error("Expected 'end' before 'else'")
+                
+            return ('IF', condition, then_body, None)  # Should never reach here
         elif self.token.type == TT_WHILE:
             self.advance()
             condition = self.expression(0)
@@ -669,13 +683,14 @@ class Parser:
                 
                 # Parse the expression
                 expr = self.expression(0)
+                
                 # Extract type from expression - with special handling for binops
                 if expr[0] == 'BINOP':
                     # For binary operations like y + 1, we need to use the result type at position 4
                     expr_type = expr[4] if len(expr) > 4 else TYPE_INT
                 else:
                     expr_type = expr[2] if len(expr) > 2 else TYPE_UNKNOWN
-
+                
                 # For binary operations involving variables, make sure we have the correct type
                 if expr[0] == 'BINOP' and expr[2][0] == 'VAR':
                     # Get the variable reference in the binop and its type
@@ -684,11 +699,11 @@ class Parser:
                     if binop_var_type != TYPE_UNKNOWN:
                         # If the variable has a known type, use that to ensure consistency
                         expr_type = TYPE_FLOAT if binop_var_type == TYPE_FLOAT else TYPE_INT
-
+                
                 # We need to handle the case where the compiler doesn't have an updated
                 # type for the variable in the AST yet, so get the type from our type tracking
                 var_type = self.var_types.get(var, TYPE_UNKNOWN)
-
+                
                 # Check type compatibility for all assignments
                 self.check_type_compatibility(var, expr_type)
                 

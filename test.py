@@ -51,7 +51,7 @@ def test():
         },
         {
             # Tests if-else statement (true condition branch taken)
-            "code": "var x := 1; var result := 0; if x == 1 do result = x; else do result = 0; end",
+            "code": "var x := 1; var result := 0; if x == 1 do result = x; end else do result = 0; end",
             "expected_env": {"x": 1, "result": 1}
         },
         {
@@ -91,12 +91,12 @@ def test():
         },
         {
             # Tests else-if construct (first false, second true)
-            "code": "var x := 1; var result := 0; if x == 0 do result = 0; else if x == 1 do result = 1; end",
+            "code": "var x := 1; var result := 0; if x == 0 do result = 0; end else if x == 1 do result = 1; end",
             "expected_env": {"x": 1, "result": 1}
         },
         {
             # Tests multiple else-if branches (first & second false, third true)
-            "code": "var x := 3; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; end",
+            "code": "var x := 3; if x == 1 do print 1; end else if x == 2 do print 2; end else if x == 3 do print 3; end",
             "expected_env": {"x": 3}
         },
         {
@@ -198,8 +198,14 @@ def test():
             "code": "var x := 5.;",
             "expected_error": "Invalid float literal"
         },
+        {
+            # Tests else-if without proper end before else
+            "code": "var x := 3; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; end",
+            "expected_error": "Expected 'end' before 'else'"
+        },
+
     ]
-    
+
     # Run test cases expected to succeed
     for i, test_case in enumerate(test_cases):
         print("\nTest %d:" % (i + 1))
