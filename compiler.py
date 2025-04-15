@@ -317,6 +317,11 @@ class Parser:
         raise Exception('Unexpected token type %d' % t.type)
 
     def statement(self):
+        # Handle empty statements (lone semicolons)
+        if self.token.type == TT_SEMI:
+            self.advance()  # Skip the semicolon
+            return ('EMPTY',)  # Return an empty statement node
+            
         if self.token.type == TT_IF:
             self.advance()
             condition = self.expression(0)
@@ -353,31 +358,46 @@ class Parser:
         elif self.token.type == TT_PRINT:
             self.advance()
             expr = self.expression(0)
-            self.consume(TT_SEMI)
+            # Optional semicolon after print
+            if self.token.type == TT_SEMI:
+                self.advance()
             return ('PRINT', expr)
         elif self.token.type == TT_BREAK:
-            self.advance(); self.consume(TT_SEMI); return ('BREAK',)
+            self.advance()
+            # Optional semicolon after break
+            if self.token.type == TT_SEMI:
+                self.advance()
+            return ('BREAK',)
         elif self.token.type == TT_CONTINUE:
-            self.advance(); self.consume(TT_SEMI); return ('CONTINUE',)
+            self.advance()
+            # Optional semicolon after continue
+            if self.token.type == TT_SEMI:
+                self.advance()
+            return ('CONTINUE',)
         elif self.token.type == TT_IDENT:
             var = self.token.value
             self.advance()
             self.variables.add(var)  # Register variable as defined
             if self.token.type == TT_ASSIGN:
                 self.advance()
-                expr = self.expression(0)
-                self.consume(TT_SEMI)
+                expr = self.expression(0) 
+                # Optional semicolon after assignment
+                if self.token.type == TT_SEMI:
+                    self.advance()
                 return ('ASSIGN', var, expr)
             # Handle expression statements (e.g., an identifier by itself)
             # This might be a variable reference or part of an expression
-            self.token = self.prev_token  # Put the token back
-            expr = self.expression(0)     # Parse it as an expression
-            self.consume(TT_SEMI)         # Expect a semicolon
-            return ('EXPR_STMT', expr)    # Return as an expression statement
+            expr = ('VAR', var)
+            # Optional semicolon after expression statement
+            if self.token.type == TT_SEMI:
+                self.advance()
+            return ('EXPR_STMT', expr)
         elif self.token.type in [TT_NUMBER, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
             # Also handle expressions that start with other tokens
             expr = self.expression(0)
-            self.consume(TT_SEMI)
+            # Optional semicolon after expression statement
+            if self.token.type == TT_SEMI:
+                self.advance()
             return ('EXPR_STMT', expr)
         token_type_name = token_name(self.token.type)
         self.error('Invalid statement starting with "%s" (%s)' %
@@ -391,6 +411,9 @@ class Parser:
 
 def evaluate(node, env):
     if isinstance(node, tuple):
+        # Handle empty statements (do nothing)
+        if node[0] == 'EMPTY':
+            return 0
         if node[0] == 'NUM':
             return node[1]
         elif node[0] == 'VAR':
@@ -590,6 +613,18 @@ def test():
         {
             "code": "x = 0; sum = 0; while x < 10 do x = x + 1; if x < 5 do continue; end if x > 8 do break; end sum = sum + x; end",
             "expected_env": {"x": 9, "sum": 26}  # sum = 5+6+7+8 = 26
+        },
+        {
+            "code": "x = 5;;; y = 10;;;",  # Test multiple semicolons
+            "expected_env": {"x": 5, "y": 10}
+        },
+        {
+            "code": "x = 5\ny = 10\nz = x + y",  # Test newlines instead of semicolons
+            "expected_env": {"x": 5, "y": 10, "z": 15}
+        },
+        {
+            "code": "x = 1; y = 2 z = 3;",  # Mix of with/without semicolons
+            "expected_env": {"x": 1, "y": 2, "z": 3}
         },
     ]
     
