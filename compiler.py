@@ -45,6 +45,8 @@ KEYWORDS = {
     'while': TT_WHILE,
     'break': TT_BREAK,
     'continue': TT_CONTINUE,
+    'xor': TT_XOR,
+    'bitnot': TT_BITNOT,
 }
 
 # Global precedence table for binary operators
@@ -100,8 +102,6 @@ class Lexer:
             '<': self.handle_le,
             '&': self.handle_bitand,
             '|': self.handle_bitor,
-            '~': self.handle_bitnot,
-            '^': self.handle_xor,
         }
 
     def error(self):
@@ -201,14 +201,6 @@ class Lexer:
     def handle_bitor(self):
         self.advance()
         return Token(TT_BITOR, '|')
-
-    def handle_bitnot(self):
-        self.advance()
-        return Token(TT_BITNOT, '~')
-
-    def handle_xor(self):
-        self.advance()
-        return Token(TT_XOR, '^')
 
     def next_token(self):
         while self.current_char:
@@ -382,7 +374,7 @@ def evaluate(node, env):
             op = node[1]
             if op == '-': return -right
             elif op == '!': return 0 if right else 1
-            elif op == '~': return ~right
+            elif op == 'bitnot': return ~right
         elif node[0] == 'ASSIGN':
             value = evaluate(node[2], env)
             env[node[1]] = value
@@ -438,7 +430,7 @@ def evaluate(node, env):
             op = node[1]
             if op == '&': return left & right
             elif op == '|': return left | right
-            elif op == '^': return left ^ right
+            elif op == 'xor': return left ^ right
     return 0
 
 def run(text):
@@ -482,7 +474,7 @@ def test():
             "expected_env": {"x": 1}
         },
         {
-            "code": "x = 5 | 3; y = x & 2; print y;", 
+            "code": "x = 5 | 3; y = x & 2; print y;",
             "expected_env": {"x": 7, "y": 2}
         },
         {
@@ -490,7 +482,15 @@ def test():
             "expected_env": {"x": 1, "y": 0}
         },
         {
-            "code": "x = 15; y = ~3; print y;", 
+            "code": "x = 5 xor 3; print x;",
+            "expected_env": {"x": 6}  # 5 xor 3 = 6
+        },
+        {
+            "code": "x = 7; y = x xor 2; print y;",
+            "expected_env": {"x": 7, "y": 5}  # 7 xor 2 = 5
+        },
+        {
+            "code": "x = 15; y = bitnot 3; print y;", 
             "expected_env": {"x": 15, "y": -4}
         },
         {
@@ -545,7 +545,7 @@ def test():
             "expected_env": {"x": 9, "sum": 26}  # sum = 5+6+7+8 = 26
         },
     ]
-
+    
     # Test cases that are expected to fail
     fail_test_cases = [
         {
