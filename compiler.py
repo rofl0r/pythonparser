@@ -368,6 +368,17 @@ class Parser:
                 expr = self.expression(0)
                 self.consume(TT_SEMI)
                 return ('ASSIGN', var, expr)
+            # Handle expression statements (e.g., an identifier by itself)
+            # This might be a variable reference or part of an expression
+            self.token = self.prev_token  # Put the token back
+            expr = self.expression(0)     # Parse it as an expression
+            self.consume(TT_SEMI)         # Expect a semicolon
+            return ('EXPR_STMT', expr)    # Return as an expression statement
+        elif self.token.type in [TT_NUMBER, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
+            # Also handle expressions that start with other tokens
+            expr = self.expression(0)
+            self.consume(TT_SEMI)
+            return ('EXPR_STMT', expr)
         token_type_name = token_name(self.token.type)
         self.error('Invalid statement starting with "%s" (%s)' %
                   (self.token.value, token_type_name))
@@ -407,6 +418,10 @@ def evaluate(node, env):
             value = evaluate(node[2], env)
             env[node[1]] = value
             return value
+        elif node[0] == 'EXPR_STMT':
+            # Evaluate the expression and discard the result
+            # (For expressions used as statements)
+            return evaluate(node[1], env)
         elif node[0] == 'PRINT':
             value = evaluate(node[1], env)
             print(value)
