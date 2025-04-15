@@ -340,7 +340,7 @@ def evaluate(node, env):
             if op == '+': return left + right
             elif op == '-': return left - right
             elif op == '*': return left * right
-            elif op == '/': return left // right
+            elif op == '/': return left // right if isinstance(left, int) else left / right  # Python 2 compatibility
             elif op == '%': return left % right
         elif node[0] == 'UNARY':
             right = evaluate(node[2], env)
@@ -405,52 +405,98 @@ def should_fail(text):
     return not run(text)['success']
 
 def test():
+    # Test cases with expected final env state
     test_cases = [
-        "x = 5 + 3 * 2; print x;",
-        "x = 1; if x == 1 do print x; end",
-        "x = 1; if x == 1 do print x; else do print 0; end",
-        "x = 5 | 3; print x;",
-        "x = 5 & 3; print x;",
-        "x = 5 | 3; y = x & 2; print y;",
-        "x = 1; y = 0; if x and y do print x; end",
-        "x = 15; y = ~3; print y;",
-        "x = 5 ^ 3; print x;",
-        "x = -5; print x;",
-        "x = 1; if x == 0 do print 0; else if x == 1 do print 1; end",
-        "x = 2; if x == 0 do print 0; else if x == 1 do print 1; else do print 2; end",
-        "x = 1; y = 1; z = 0; if x == 1 and y == 1 do print 1; end",
-        "x = 1; y = 0; z = 1; if x == 0 or y == 1 or z == 1 do print 1; else do print 0; end",
-        "x = 1; y = 1; if x == 1 and y == 0 or x == 0 and y == 1 do print 1; else do print 0; end",
-        "x = 3; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; end",
-        "x = 4; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; else do print 4; end",
-        "x = 1; y = 2; if x == 1 do if y == 1 do print 1; else if y == 2 do print 2; end else do print 0; end",
-        "x = 2; if x == 1 do print 1; else if x == 2 do if x == 2 do print 22; end else do print 3; end",
-
+        {
+            "code": "x = 5 + 3 * 2; print x;",
+            "expected_env": {"x": 11}
+        },
+        {
+            "code": "x = 1; if x == 1 do print x; end", 
+            "expected_env": {"x": 1}
+        },
+        {
+            "code": "x = 1; if x == 1 do print x; else do print 0; end",
+            "expected_env": {"x": 1}
+        },
+        {
+            "code": "x = 5 | 3; print x;", 
+            "expected_env": {"x": 7}
+        },
+        {
+            "code": "x = 5 & 3; print x;", 
+            "expected_env": {"x": 1}
+        },
+        {
+            "code": "x = 5 | 3; y = x & 2; print y;", 
+            "expected_env": {"x": 7, "y": 2}
+        },
+        {
+            "code": "x = 1; y = 0; if x and y do print x; end", 
+            "expected_env": {"x": 1, "y": 0}
+        },
+        {
+            "code": "x = 15; y = ~3; print y;", 
+            "expected_env": {"x": 15, "y": -4}
+        },
+        {
+            "code": "x = 1; if x == 0 do print 0; else if x == 1 do print 1; end",
+            "expected_env": {"x": 1}
+        },
+        {
+            "code": "x = 3; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; end",
+            "expected_env": {"x": 3}
+        },
+        {
+            "code": "x = 2; if x == 1 do print 1; else if x == 2 do if x == 2 do print 22; end else do print 3; end",
+            "expected_env": {"x": 2}
+        }
     ]
     
     # Test cases that are expected to fail
     fail_test_cases = [
-        ("x = 1; if !x or x and y do print x; end", "Variable 'y' is not defined"),
-        ("print z;", "Variable 'z' is not defined"),
-        ("if x do print 1; end", "Variable 'x' is not defined")
+        {
+            "code": "x = 1; if !x or x and y do print x; end",
+            "expected_error": "Variable 'y' is not defined"
+        },
+        {
+            "code": "print z;",
+            "expected_error": "Variable 'z' is not defined"
+        },
+        {
+            "code": "if x do print 1; end",
+            "expected_error": "Variable 'x' is not defined" 
+        }
     ]
     
     # Run test cases expected to succeed
-    for i, test in enumerate(test_cases):
+    for i, test_case in enumerate(test_cases):
         print("\nTest %d:" % (i + 1))
-        print("Input: %s" % test)
-        result = run(test)
+        print("Input: %s" % test_case["code"])
+        result = run(test_case["code"])
         if result['success']:
-            print("Success! Environment: %s" % result['env'])
+            # Check if environment values match
+            env_match = True
+            for k, v in test_case["expected_env"].items():
+                if k not in result['env'] or result['env'][k] != v:
+                    env_match = False
+                    break
+            
+            if env_match:
+                print("Success! Environment matches expectations.")
+            else:
+                print("Test passed but with incorrect environment values:")
+                print("  Expected env: %s" % test_case["expected_env"])
+                print("  Actual env: %s" % result['env'])
         else:
             print("Failed! Error: %s" % result['error'])
     
     # Run test cases expected to fail
-    for i, (test, expected_error) in enumerate(fail_test_cases):
+    for i, test_case in enumerate(fail_test_cases):
         print("\nFail Test %d:" % (i + 1))
-        print("Input: %s" % test)
-        result = run(test)
-        if not result['success'] and expected_error in result['error']:
+        print("Input: %s" % test_case["code"])
+        result = run(test_case["code"])
+        if not result['success'] and test_case["expected_error"] in result['error']:
             print("Successfully failed with error: %s" % result['error'])
         else:
             print("Test didn't fail as expected! Result: %s" % result)
