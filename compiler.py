@@ -27,6 +27,7 @@ TT_BITOR = 24
 TT_BITNOT = 25
 TT_XOR = 26
 TT_DO = 27
+TT_WHILE = 28
 
 # Global hashtable for keywords
 KEYWORDS = {
@@ -36,7 +37,8 @@ KEYWORDS = {
     'print': TT_PRINT,
     'and': TT_AND,
     'or': TT_OR,
-    'do': TT_DO  # Added 'do' keyword
+    'do': TT_DO,
+    'while': TT_WHILE,
 }
 
 # Global precedence table for binary operators
@@ -305,6 +307,15 @@ class Parser:
                     return ('IF', condition, then_body, else_body)
             self.consume(TT_END)
             return ('IF', condition, then_body, None)
+        elif self.token.type == TT_WHILE:
+            self.advance()
+            condition = self.expression(0)
+            self.consume(TT_DO)
+            body = []
+            while self.token.type != TT_END:
+                body.append(self.statement())
+            self.consume(TT_END)
+            return ('WHILE', condition, body)
         elif self.token.type == TT_PRINT:
             self.advance()
             expr = self.expression(0)
@@ -364,6 +375,11 @@ def evaluate(node, env):
             elif node[3]:  # else block exists
                 for stmt in node[3]:
                     evaluate(stmt, env)
+        elif node[0] == 'WHILE':
+            while evaluate(node[1], env):  # Evaluate condition
+                for stmt in node[2]:  # Execute body
+                    evaluate(stmt, env)
+            return 0
         elif node[0] == 'COMPARE':
             left = evaluate(node[2], env)
             right = evaluate(node[3], env)
@@ -450,7 +466,24 @@ def test():
         {
             "code": "x = 2; if x == 1 do print 1; else if x == 2 do if x == 2 do print 22; end else do print 3; end",
             "expected_env": {"x": 2}
-        }
+        },
+        # While loop test cases
+        {
+            "code": "x = 0; while x < 5 do x = x + 1; end print x;",
+            "expected_env": {"x": 5}
+        },
+        {
+            "code": "x = 0; y = 0; while x < 3 do y = y + x; x = x + 1; end",
+            "expected_env": {"x": 3, "y": 3}  # y = 0+0 + 0+1 + 1+2 = 3
+        },
+        {
+            "code": "x = 10; while x > 0 do x = x - 2; end",
+            "expected_env": {"x": 0}
+        },
+        {
+            "code": "x = 1; y = 1; while x < 10 do x = x * 2; y = y + x; end",
+            "expected_env": {"x": 16, "y": 31}  # y = 1+2 + 2+4 + 6+8 + 14+16 = 31
+         },
     ]
     
     # Test cases that are expected to fail
