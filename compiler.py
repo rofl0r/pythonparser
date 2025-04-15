@@ -74,9 +74,11 @@ BINARY_PRECEDENCE = {
 UNARY_PRECEDENCE = 90
 
 class Token:
-    def __init__(self, type, value):
+    def __init__(self, type, value, line=0, column=0):
         self.type = type
         self.value = value
+        self.line = line
+        self.column = column
 
     def __str__(self):
         return 'Token(%d, %s)' % (self.type, self.value)
@@ -107,6 +109,10 @@ class Lexer:
             '|': self.handle_bitor,
         }
 
+    def make_token(self, token_type, value):
+        """Helper to create a token with current line and column info"""
+        return Token(token_type, value, self.line, self.column)
+
     def error(self):
         raise Exception('Invalid character at line %d, column %d: "%s"' %
                        (self.line, self.column, self.current_char))
@@ -128,7 +134,7 @@ class Lexer:
         start = self.pos
         while self.current_char and self.current_char.isdigit():
             self.advance()
-        return Token(TT_NUMBER, int(self.text[start:self.pos]))
+        return self.make_token(TT_NUMBER, int(self.text[start:self.pos]))
 
     def identifier(self):
         """Parse an identifier or keyword using the global KEYWORDS hashtable"""
@@ -139,76 +145,94 @@ class Lexer:
 
         # Look up in the global KEYWORDS hashtable, default to TT_IDENT if not found
         token_type = KEYWORDS.get(value, TT_IDENT)
-        return Token(token_type, value)
+        return self.make_token(token_type, value)
 
     # Handlers for various operators
     def handle_plus(self):
+        token = self.make_token(TT_PLUS, '+')
         self.advance()
-        return Token(TT_PLUS, '+')
+        return token
 
     def handle_minus(self):
+        token = self.make_token(TT_MINUS, '-')
         self.advance()
-        return Token(TT_MINUS, '-')
+        return token
 
     def handle_mult(self):
+        token = self.make_token(TT_MULT, '*')
         self.advance()
-        return Token(TT_MULT, '*')
+        return token
 
     def handle_div(self):
+        token = self.make_token(TT_DIV, '/')
         self.advance()
-        return Token(TT_DIV, '/')
+        return token
 
     def handle_mod(self):
+        token = self.make_token(TT_MOD, '%')
         self.advance()
-        return Token(TT_MOD, '%')
+        return token
 
     def handle_lparen(self):
+        token = self.make_token(TT_LPAREN, '(')
         self.advance()
-        return Token(TT_LPAREN, '(')
+        return token
 
     def handle_rparen(self):
+        token = self.make_token(TT_RPAREN, ')')
         self.advance()
-        return Token(TT_RPAREN, ')')
+        return token
 
     def handle_semi(self):
+        token = self.make_token(TT_SEMI, ';')
         self.advance()
-        return Token(TT_SEMI, ';')
+        return token
 
     def handle_assign_or_eq(self):
+        token = self.make_token(TT_ASSIGN, '=')
         self.advance()
         if self.current_char == '=':
+            token.type = TT_EQ
+            token.value = '=='
             self.advance()
-            return Token(TT_EQ, '==')
-        return Token(TT_ASSIGN, '=')
+        return token
 
     def handle_not_or_ne(self):
+        token = self.make_token(TT_NOT, '!')
         self.advance()
         if self.current_char == '=':
+            token.type = TT_NE
+            token.value = '!='
             self.advance()
-            return Token(TT_NE, '!=')
-        return Token(TT_NOT, '!')
+        return token
 
     def handle_ge(self):
+        token = self.make_token(TT_GT, '>')
         self.advance()
         if self.current_char == '=':
+            token.type = TT_GE
+            token.value = '>='
             self.advance()
-            return Token(TT_GE, '>=')
-        return Token(TT_GT, '>')
+        return token
 
     def handle_le(self):
+        token = self.make_token(TT_LT, '<')
         self.advance()
         if self.current_char == '=':
+            token.type = TT_LE
+            token.value = '<='
             self.advance()
-            return Token(TT_LE, '<=')
-        return Token(TT_LT, '<')
+        return token
 
     def handle_bitand(self):
+        token = self.make_token(TT_BITAND, '&')
         self.advance()
-        return Token(TT_BITAND, '&')
+        return token
 
     def handle_bitor(self):
+        token = self.make_token(TT_BITOR, '|')
         self.advance()
-        return Token(TT_BITOR, '|')
+        return token
 
     def next_token(self):
         while self.current_char:
@@ -228,7 +252,7 @@ class Lexer:
 
             self.error()
 
-        return Token(TT_EOF, None)
+        return self.make_token(TT_EOF, None)
 
 # Custom exceptions for control flow
 class BreakException(Exception):
@@ -358,21 +382,15 @@ class Parser:
         elif self.token.type == TT_PRINT:
             self.advance()
             expr = self.expression(0)
-            # Optional semicolon after print
-            if self.token.type == TT_SEMI:
-                self.advance()
+            self.check_statement_end()
             return ('PRINT', expr)
         elif self.token.type == TT_BREAK:
             self.advance()
-            # Optional semicolon after break
-            if self.token.type == TT_SEMI:
-                self.advance()
+            self.check_statement_end()
             return ('BREAK',)
         elif self.token.type == TT_CONTINUE:
             self.advance()
-            # Optional semicolon after continue
-            if self.token.type == TT_SEMI:
-                self.advance()
+            self.check_statement_end()
             return ('CONTINUE',)
         elif self.token.type == TT_IDENT:
             var = self.token.value
@@ -381,27 +399,35 @@ class Parser:
             if self.token.type == TT_ASSIGN:
                 self.advance()
                 expr = self.expression(0) 
-                # Optional semicolon after assignment
-                if self.token.type == TT_SEMI:
-                    self.advance()
+                self.check_statement_end("do")
                 return ('ASSIGN', var, expr)
             # Handle expression statements (e.g., an identifier by itself)
-            # This might be a variable reference or part of an expression
             expr = ('VAR', var)
-            # Optional semicolon after expression statement
-            if self.token.type == TT_SEMI:
-                self.advance()
+            self.check_statement_end()
             return ('EXPR_STMT', expr)
         elif self.token.type in [TT_NUMBER, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
             # Also handle expressions that start with other tokens
             expr = self.expression(0)
-            # Optional semicolon after expression statement
-            if self.token.type == TT_SEMI:
-                self.advance()
+            self.check_statement_end("do")
             return ('EXPR_STMT', expr)
         token_type_name = token_name(self.token.type)
         self.error('Invalid statement starting with "%s" (%s)' %
                   (self.token.value, token_type_name))
+                  
+    def check_statement_end(self, allow_also=None):
+        """Check if a statement is properly terminated by semicolon, newline, or EOF"""
+        # Allow specific token (e.g. "do" for assignments in if/while conditions)
+        if allow_also and self.token.type == globals().get('TT_' + allow_also.upper(), 0):
+            return
+        
+        # Consume semicolon if present
+        if self.token.type == TT_SEMI:
+            self.advance()
+            return
+            
+        # Check if we're at the end of a line or file
+        if self.token.type != TT_EOF and self.prev_token and self.token.line == self.prev_token.line:
+            self.error("Expected semicolon between statements on the same line")
 
     def parse(self):
         statements = []
@@ -623,8 +649,20 @@ def test():
             "expected_env": {"x": 5, "y": 10, "z": 15}
         },
         {
-            "code": "x = 1; y = 2 z = 3;",  # Mix of with/without semicolons
+            "code": "x = 1; y = 2; z = 3;",  # Mix of with/without semicolons
             "expected_env": {"x": 1, "y": 2, "z": 3}
+        },
+        {
+            "code": "a = 1;\nb = 2\nc = 3",  # New lines instead of semicolons
+            "expected_env": {"a": 1, "b": 2, "c": 3}
+        },
+        {
+            "code": "a = 1; b = 2; c = 3",  # Semicolons on the same line - should work
+            "expected_env": {"a": 1, "b": 2, "c": 3}
+        },
+        {
+            "code": "x = 5 + 3\nprint x",  # Missing semicolon but on different lines - should work
+            "expected_env": {"x": 8}
         },
     ]
     
@@ -641,6 +679,14 @@ def test():
         {
             "code": "if x do print 1; end",
             "expected_error": "Variable 'x' is not defined" 
+        },
+        {
+            "code": "x = 5 + 3 print x;",  # Missing semicolon between statements on the same line
+            "expected_error": "Expected semicolon between statements"
+        },
+        {
+            "code": "a = 1 b = 2",  # No semicolon between statements on the same line
+            "expected_error": "Expected semicolon between statements"
         }
     ]
     
