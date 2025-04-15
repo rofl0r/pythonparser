@@ -38,6 +38,8 @@ TT_MINUS_ASSIGN = 34
 TT_MULT_ASSIGN = 35
 TT_DIV_ASSIGN = 36
 TT_MOD_ASSIGN = 37
+TT_SHR = 38
+TT_SHL = 39
 
 # Global hashtable for keywords
 KEYWORDS = {
@@ -53,6 +55,8 @@ KEYWORDS = {
     'continue': TT_CONTINUE,
     'xor': TT_XOR,
     'bitnot': TT_BITNOT,
+    'shl': TT_SHL,
+    'shr': TT_SHR,
 }
 
 # Global precedence table for binary operators
@@ -71,6 +75,8 @@ BINARY_PRECEDENCE = {
     TT_LT: 60,
     TT_PLUS: 70,
     TT_MINUS: 70,
+    TT_SHL: 75,
+    TT_SHR: 75,
     TT_MULT: 80,
     TT_DIV: 80,
     TT_MOD: 80,
@@ -358,7 +364,7 @@ class Parser:
             # Parse the right side expression
             right = self.expression(0)
             return ('ASSIGN', var_name, right)
-        if t.type in [TT_PLUS, TT_MINUS, TT_MULT, TT_DIV, TT_MOD]:
+        if t.type in [TT_PLUS, TT_MINUS, TT_MULT, TT_DIV, TT_MOD, TT_SHL, TT_SHR]:
             return ('BINOP', t.value, left, self.expression(self.lbp(t)))
         elif t.type in [TT_EQ, TT_NE, TT_GE, TT_LE, TT_LT, TT_GT]:
             return ('COMPARE', t.value, left, self.expression(self.lbp(t)))
@@ -497,6 +503,9 @@ def evaluate(node, env):
             elif op == '*': return left * right
             elif op == '/': return left // right if isinstance(left, int) else left / right  # Python 2 compatibility
             elif op == '%': return left % right
+            elif op == 'shl': return left << right
+            elif op == 'shr': return left >> right
+
         elif node[0] == 'UNARY':
             right = evaluate(node[2], env)
             op = node[1]
@@ -755,7 +764,15 @@ def test():
         {
             "code": "x = 1; y = 2; x += y; y *= 3; print x; print y;", 
             "expected_env": {"x": 3, "y": 6}
-        }
+        },
+        {
+            "code": "x = 5; y = x shl 2; print y;", # 5 << 2 = 20
+            "expected_env": {"x": 5, "y": 20}
+        },
+        {
+            "code": "x = 20; y = x shr 2; print y;", # 20 >> 2 = 5
+            "expected_env": {"x": 20, "y": 5}
+        },
     ]
     
     # Test cases that are expected to fail
