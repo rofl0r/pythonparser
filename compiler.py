@@ -85,6 +85,9 @@ TYPE_UINT = 3
 TYPE_LONG = 4
 TYPE_ULONG = 5
 
+# Order of type precedence (highest to lowest)
+TYPE_PRECEDENCE = [TYPE_FLOAT, TYPE_ULONG, TYPE_LONG, TYPE_UINT, TYPE_INT]
+
 # Mapping from token types to variable types
 TOKEN_TO_TYPE_MAP = {
     TT_INT_LITERAL: TYPE_INT,
@@ -870,19 +873,16 @@ class Parser:
             if left.expr_type != right.expr_type and left.expr_type != TYPE_UNKNOWN and right.expr_type != TYPE_UNKNOWN:
                 self.error("Type mismatch in binary operation: %s and %s" % 
                           (var_type_to_string(left.expr_type), var_type_to_string(right.expr_type)))
-            
-            # Determine result type based on operands
-            if left.expr_type == TYPE_FLOAT or right.expr_type == TYPE_FLOAT:
-                result_type = TYPE_FLOAT
-            elif left.expr_type == TYPE_ULONG or right.expr_type == TYPE_ULONG:
-                result_type = TYPE_ULONG
-            elif left.expr_type == TYPE_LONG or right.expr_type == TYPE_LONG:
-                result_type = TYPE_LONG
-            elif left.expr_type == TYPE_UINT or right.expr_type == TYPE_UINT:
-                result_type = TYPE_UINT
+            # Determine result type based on operands using the TYPE_PRECEDENCE list
+            if left.expr_type != TYPE_UNKNOWN and left.expr_type == right.expr_type:
+                result_type = left.expr_type
             else:
                 result_type = TYPE_INT
-            
+                # Use the type with the highest precedence
+                for t in TYPE_PRECEDENCE:
+                    if left.expr_type == t or right.expr_type == t:
+                        result_type = t
+                        break
             return BinaryOpNode(t.value, left, right, result_type)
             
         elif t.type in [TT_EQ, TT_NE, TT_GE, TT_LE, TT_LT, TT_GT]:
