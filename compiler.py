@@ -84,6 +84,8 @@ class Token:
 class Lexer:
     def __init__(self, text):
         self.text = text
+        self.line = 1      # Current line number (1-based)
+        self.column = 1    # Current column number (1-based)
         self.pos = 0
         self.current_char = text[0] if text else None
 
@@ -106,10 +108,15 @@ class Lexer:
         }
 
     def error(self):
-        raise Exception('Invalid character at position %d: "%s"' %
-                       (self.pos, self.current_char))
-
+        raise Exception('Invalid character at line %d, column %d: "%s"' %
+                       (self.line, self.column, self.current_char))
     def advance(self):
+        # Update line and column tracking
+        if self.current_char == '\n':
+            self.line += 1
+            self.column = 1
+        else:
+            self.column += 1
         self.pos += 1
         self.current_char = self.text[self.pos] if self.pos < len(self.text) else None
 
@@ -235,22 +242,28 @@ class ContinueException(Exception):
 class Parser:
     def __init__(self, lexer):
         self.lexer = lexer
-        self.token = self.lexer.next_token()
+        self.token = self.lexer.next_token() # Current token
+        self.prev_token = None  # Previous token (for better error messages)
         self.variables = set()  # Track declared variables
 
     def error(self, message):
-        raise Exception(message)
+        token_type_name = token_name(self.token.type)
+        raise Exception("%s at line %d, column %d. Token: %s (%s)" %
+                       (message, self.lexer.line, self.lexer.column,
+                        self.token.value, token_type_name))
 
     def advance(self):
+        self.prev_token = self.token
         self.token = self.lexer.next_token()
 
     def consume(self, token_type):
         if self.token.type == token_type:
             self.advance()
         else:
-            self.error('Expected token type %d but got %d (%s)' % 
-                      (token_type, self.token.type, self.token.value))
-
+            expected_type_name = token_name(token_type)
+            actual_type_name = token_name(self.token.type)
+            self.error('Expected %s but got %s' %
+                       (expected_type_name, actual_type_name))
     def lbp(self, t):
         return BINARY_PRECEDENCE.get(t.type, 0)
 
@@ -355,7 +368,9 @@ class Parser:
                 expr = self.expression(0)
                 self.consume(TT_SEMI)
                 return ('ASSIGN', var, expr)
-        self.error('Invalid statement')
+        token_type_name = token_name(self.token.type)
+        self.error('Invalid statement starting with "%s" (%s)' %
+                  (self.token.value, token_type_name))
 
     def parse(self):
         statements = []
