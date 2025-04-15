@@ -452,6 +452,9 @@ class Parser:
             var_name = left[1]
             var_type = left[2] if len(left) > 2 else TYPE_UNKNOWN
             
+            # Always get the most up-to-date type from our variable table
+            var_type = self.var_types.get(var_name, TYPE_UNKNOWN)
+            
             # Check if variable is a constant (declared with 'let')
             if var_name in self.constants:
                 self.error("Cannot reassign to constant '%s'" % var_name)
@@ -459,6 +462,17 @@ class Parser:
             # Parse the right side expression
             right = self.expression(0)
             right_type = right[2] if len(right) > 2 else TYPE_UNKNOWN
+            
+            # For assignments in conditions (e.g. while x = y do),
+            # we should use the fully resolved types from our variable table
+            if right[0] == 'VAR':
+                right_var = right[1]
+                right_type = self.var_types.get(right_var, right_type)
+                
+                # Add debug code here if needed to inspect the types
+                # print("Assignment in condition: %s(%s) = %s(%s)" % 
+                #      (var_name, var_type_to_string(var_type), 
+                #       right_var, var_type_to_string(right_type)))
             
             # Check type compatibility
             self.check_type_compatibility(var_name, right_type)
@@ -649,9 +663,17 @@ class Parser:
                 op = self.token.type
                 op_value = self.token.value
                 var_type = self.var_types.get(var, TYPE_UNKNOWN)
+                
+                # Advance past the operator
                 self.advance()
+                
+                # Parse the expression
                 expr = self.expression(0)
                 expr_type = expr[2] if len(expr) > 2 else TYPE_UNKNOWN
+                
+                # We need to handle the case where the compiler doesn't have an updated
+                # type for the variable in the AST yet, so get the type from our type tracking
+                var_type = self.var_types.get(var, TYPE_UNKNOWN)
                 
                 # Check type compatibility for all assignments
                 self.check_type_compatibility(var, expr_type)
