@@ -4,6 +4,8 @@ from compiler import *
 def test():
     # Test cases with expected final env state
     test_cases = [
+        # Regular test cases (expected to succeed)
+        # Each has "code" and "expected_env"
         {
             # Tests variable declaration with type inference (:=)
             "code": "var x := 5;",
@@ -102,7 +104,7 @@ def test():
         {
             # Tests mixed int and float operations
             "code": "var x: int = 5; var y: float = 2.5; var z := y;", 
-            "expected_env": {"x": 5, "y": 2.5, "z": 2.5}
+            "expected_env": {"x": 5, "y": 2.5, "z": 2.5}  # Variable declaration with inferred type from another variable
         },
         {
             # Tests int division
@@ -111,13 +113,8 @@ def test():
         },
         {
             # Tests float division
-            "code": "var x := 10.0; var y := 3; var z := x / y;",
-            "expected_env": {"x": 10.0, "y": 3, "z": 3.3333333333333335}  # Float division
-        },
-        {
-            # Tests division with float result
-            "code": "var x: int = 10; var y: float = 4.0; var z := x / y;",
-            "expected_env": {"x": 10, "y": 4.0, "z": 2.5}
+            "code": "var x := 10.0; var y := 3.0; var z := x / y;",
+            "expected_env": {"x": 10.0, "y": 3.0, "z": 3.3333333333333335}  # Float division
         },
         {
             # Tests assignment as expression in while condition
@@ -126,10 +123,10 @@ def test():
             # x will be decremented 4 times (while y is 1,2,3,4)
             "expected_env": {"x": 6, "y": 5}
         },
-    ]
-    
-    # Test cases that are expected to fail
-    fail_test_cases = [
+
+        # Test cases that are expected to fail
+        # Each has "code" and "expected_error"
+
         {
             # Tests error when trying to assign float to int
             "code": "var x := 1; var y := 0.1; x = y;",
@@ -210,45 +207,66 @@ def test():
             "code": "var x := 3; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; end",
             "expected_error": "Expected 'end' before 'else'"
         },
-
+        {
+            # Tests error when mixing int and float types in binary operation
+            # This test expects a failure since our language doesn't allow implicit type conversion
+            "code": "var x := 10; var y := 3.0; var z := x / y;", 
+            "expected_error": "Type mismatch in binary operation"
+        },
+        
     ]
 
-    # Run test cases expected to succeed
-    for i, test_case in enumerate(test_cases):
-        print("\nTest %d:" % (i + 1))
-        print("Input: %s" % test_case["code"])
-        result = run(test_case["code"])
-        if result['success']:
-            # Check if environment values match
-            env_match = True
-            for k, v in test_case["expected_env"].items():
-                if k not in result['env'] or result['env'][k] != v:
-                    env_match = False
-                    break
-            
-            if env_match:
-                print("Success! Environment matches expectations.")
-            else:
-                print("Test passed but with incorrect environment values:")
-                print("  Expected env: %s" % test_case["expected_env"])
-                print("  Actual env: %s" % result['env'])
-        else:
-            print("Failed! Error: %s" % result['error'])
-            if result.get('ast'):
-                print("AST dump: %s" % result['ast'])
+    # List to track failing tests
+    failed_tests = []
 
-    # Run test cases expected to fail
-    for i, test_case in enumerate(fail_test_cases):
-        print("\nFail Test %d:" % (i + 1))
+    # Run all test cases
+    for i, test_case in enumerate(test_cases):
+        test_num = i + 1
+        print("\nTest %d:" % test_num)
         print("Input: %s" % test_case["code"])
+        
         result = run(test_case["code"])
-        if not result['success'] and test_case["expected_error"] in result['error']:
-            print("Successfully failed with error: %s" % result['error'])
+        
+        # Check if this test is expected to fail
+        if "expected_error" in test_case:
+            # This is a test that should fail
+            if not result['success'] and test_case["expected_error"] in result['error']:
+                print("Success! Failed with expected error: %s" % result['error'])
+            else:
+                print("Test didn't fail as expected! Result: %s" % result)
+                failed_tests.append(test_num)
+                # Add AST dump for unexpected failures
+                if result.get('ast'):
+                    print("AST dump: %s" % result['ast'])
+            
         else:
-            print("Test didn't fail as expected! Result: %s" % result)
-            # Add AST dump for unexpected failures
-            if result.get('ast'):
-                print("AST dump: %s" % result['ast'])
+            # This is a test that should succeed
+            if result['success']:
+                # Check if environment values match
+                env_match = True
+                for k, v in test_case["expected_env"].iteritems():
+                    if k not in result['env'] or result['env'][k] != v:
+                        env_match = False
+                        break
+                
+                if env_match:
+                    print("Success! Environment matches expectations.")
+                else:
+                    print("Test passed but with incorrect environment values:")
+                    print("  Expected env: %s" % test_case["expected_env"])
+                    print("  Actual env: %s" % result['env'])
+                    failed_tests.append(test_num)
+            else:
+                print("Failed! Error: %s" % result['error'])
+                failed_tests.append(test_num)
+                if result.get('ast'):
+                    print("AST dump: %s" % result['ast'])
+
+    # Print statistics at the end
+    print("\n========== Test Results ==========")
+    print("Total tests: %d" % len(test_cases))
+    print("Failed test IDs: %s" % (", ".join(str(num) for num in failed_tests) if failed_tests else "None"))
+    print("All tests passed: %s" % ("No" if failed_tests else "Yes"))
 
 if __name__ == '__main__':
     test()
