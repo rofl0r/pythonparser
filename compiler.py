@@ -1,4 +1,5 @@
 # Implementation of a Pratt parser in Python 2.7
+from interpreter import *
 # Token types
 TT_EOF = 0
 TT_PLUS = 2
@@ -236,22 +237,19 @@ class BinaryOpNode(ASTNode):
         right_val = self.right.eval(env)
         
         if self.operator == '+':
-            return left_val + right_val
+            return add(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '-':
-            return left_val - right_val
+            return subtract(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '*':
-            return left_val * right_val
+            return multiply(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '/':
-            if self.expr_type == TYPE_INT or self.expr_type == TYPE_UINT or self.expr_type == TYPE_LONG or self.expr_type == TYPE_ULONG:
-                return left_val // right_val  # Integer division
-            else:
-                return left_val / right_val   # Float division
+            return divide(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '%':
-            return left_val % right_val
+            return modulo(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == 'shl':
-            return left_val << right_val
+            return shift_left(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == 'shr':
-            return left_val >> right_val
+            return shift_right(left_val, right_val, self.left.expr_type, self.right.expr_type)
 
 class UnaryOpNode(ASTNode):
     def __init__(self, operator, operand, result_type):
@@ -264,11 +262,11 @@ class UnaryOpNode(ASTNode):
         value = self.operand.eval(env)
         
         if self.operator == '-':
-            return -value
+            return negate(value, self.operand.expr_type)
         elif self.operator == '!':
-            return 0 if value else 1
+            return logical_not(value)
         elif self.operator == 'bitnot':
-            return ~value
+            return bitwise_not(value, self.operand.expr_type)
 
 class AssignNode(ASTNode):
     def __init__(self, var_name, expr, var_type):
@@ -295,18 +293,16 @@ class CompoundAssignNode(ASTNode):
         expr_value = self.expr.eval(env)
         
         if self.op_type == TT_PLUS_ASSIGN:
-            result = current_value + expr_value
+            result = add(current_value, expr_value, self.expr_type, self.expr.expr_type)
         elif self.op_type == TT_MINUS_ASSIGN:
-            result = current_value - expr_value
+            result = subtract(current_value, expr_value, self.expr_type, self.expr.expr_type)
         elif self.op_type == TT_MULT_ASSIGN:
-            result = current_value * expr_value
+            result = multiply(current_value, expr_value, self.expr_type, self.expr.expr_type)
         elif self.op_type == TT_DIV_ASSIGN:
-            if self.expr_type in [TYPE_INT, TYPE_UINT, TYPE_LONG, TYPE_ULONG]:
-                result = current_value // expr_value  # Integer division
-            else:
-                result = current_value / expr_value   # Float division
+            result = divide(current_value, expr_value, self.expr_type, self.expr.expr_type)
         elif self.op_type == TT_MOD_ASSIGN:
-            result = current_value % expr_value
+            result = modulo(current_value, expr_value, self.expr_type, self.expr.expr_type)
+            
             
         env[self.var_name] = result
         return result
@@ -412,17 +408,17 @@ class CompareNode(ASTNode):
         right_val = self.right.eval(env)
         
         if self.operator == '==':
-            return 1 if left_val == right_val else 0
+            return compare_eq(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '!=':
-            return 1 if left_val != right_val else 0
+            return compare_ne(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '>=':
-            return 1 if left_val >= right_val else 0
+            return compare_ge(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '>':
-            return 1 if left_val > right_val else 0
+            return compare_gt(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '<':
-            return 1 if left_val < right_val else 0
+            return compare_lt(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '<=':
-            return 1 if left_val <= right_val else 0
+            return compare_le(left_val, right_val, self.left.expr_type, self.right.expr_type)
 
 class LogicalNode(ASTNode):
     def __init__(self, operator, left, right):
@@ -436,9 +432,9 @@ class LogicalNode(ASTNode):
         left_val = self.left.eval(env)
         
         if self.operator == 'and':
-            return 1 if left_val and self.right.eval(env) else 0
+            return logical_and(left_val, self.right.eval(env))
         elif self.operator == 'or':
-            return 1 if left_val or self.right.eval(env) else 0
+            return logical_or(left_val, self.right.eval(env))
 
 class BitOpNode(ASTNode):
     def __init__(self, operator, left, right):
@@ -453,11 +449,11 @@ class BitOpNode(ASTNode):
         right_val = self.right.eval(env)
         
         if self.operator == '&':
-            return left_val & right_val
+            return bitwise_and(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '|':
-            return left_val | right_val
+            return bitwise_or(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == 'xor':
-            return left_val ^ right_val
+            return bitwise_xor(left_val, right_val, self.left.expr_type, self.right.expr_type)
 
 class Token:
     def __init__(self, type, value, line=0, column=0):
@@ -878,6 +874,7 @@ class Parser:
             if left.expr_type != right.expr_type and left.expr_type != TYPE_UNKNOWN and right.expr_type != TYPE_UNKNOWN:
                 self.error("Type mismatch in binary operation: %s and %s" % 
                           (var_type_to_string(left.expr_type), var_type_to_string(right.expr_type)))
+            
             # Determine result type based on operands using the TYPE_PRECEDENCE list
             if left.expr_type != TYPE_UNKNOWN and left.expr_type == right.expr_type:
                 result_type = left.expr_type
@@ -888,6 +885,7 @@ class Parser:
                     if left.expr_type == t or right.expr_type == t:
                         result_type = t
                         break
+            
             return BinaryOpNode(t.value, left, right, result_type)
             
         elif t.type in [TT_EQ, TT_NE, TT_GE, TT_LE, TT_LT, TT_GT]:
