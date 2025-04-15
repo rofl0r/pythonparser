@@ -32,6 +32,12 @@ TT_LT = 29
 TT_GT = 30
 TT_BREAK = 31
 TT_CONTINUE = 32
+# Compound assignment operators
+TT_PLUS_ASSIGN = 33
+TT_MINUS_ASSIGN = 34
+TT_MULT_ASSIGN = 35
+TT_DIV_ASSIGN = 36
+TT_MOD_ASSIGN = 37
 
 # Global hashtable for keywords
 KEYWORDS = {
@@ -151,26 +157,46 @@ class Lexer:
     def handle_plus(self):
         token = self.make_token(TT_PLUS, '+')
         self.advance()
+        if self.current_char == '=':
+            token.type = TT_PLUS_ASSIGN
+            token.value = '+='
+            self.advance()
         return token
 
     def handle_minus(self):
         token = self.make_token(TT_MINUS, '-')
         self.advance()
+        if self.current_char == '=':
+            token.type = TT_MINUS_ASSIGN
+            token.value = '-='
+            self.advance()
         return token
 
     def handle_mult(self):
         token = self.make_token(TT_MULT, '*')
         self.advance()
+        if self.current_char == '=':
+            token.type = TT_MULT_ASSIGN
+            token.value = '*='
+            self.advance()
         return token
 
     def handle_div(self):
         token = self.make_token(TT_DIV, '/')
         self.advance()
+        if self.current_char == '=':
+            token.type = TT_DIV_ASSIGN
+            token.value = '/='
+            self.advance()
         return token
 
     def handle_mod(self):
         token = self.make_token(TT_MOD, '%')
         self.advance()
+        if self.current_char == '=':
+            token.type = TT_MOD_ASSIGN
+            token.value = '%='
+            self.advance()
         return token
 
     def handle_lparen(self):
@@ -227,11 +253,13 @@ class Lexer:
     def handle_bitand(self):
         token = self.make_token(TT_BITAND, '&')
         self.advance()
+        # No &= operator since we use keywords for bitwise operations
         return token
 
     def handle_bitor(self):
         token = self.make_token(TT_BITOR, '|')
         self.advance()
+        # No |= operator since we use keywords for bitwise operations
         return token
 
     def next_token(self):
@@ -396,9 +424,21 @@ class Parser:
             var = self.token.value
             self.advance()
             self.variables.add(var)  # Register variable as defined
-            if self.token.type == TT_ASSIGN:
+            
+            # Handle all assignment operators (regular and compound)
+            if self.token.type in [TT_ASSIGN, TT_PLUS_ASSIGN, TT_MINUS_ASSIGN, 
+                                  TT_MULT_ASSIGN, TT_DIV_ASSIGN, TT_MOD_ASSIGN]:
+                op = self.token.type
+                op_value = self.token.value
                 self.advance()
                 expr = self.expression(0) 
+                
+                # For compound operators, we need to generate ("COMPOUND_ASSIGN", op_type, var, expr)
+                if op != TT_ASSIGN:
+                    self.check_statement_end("do")
+                    return ('COMPOUND_ASSIGN', op, var, expr)
+                    
+                # Regular assignment
                 self.check_statement_end("do")
                 return ('ASSIGN', var, expr)
             # Handle expression statements (e.g., an identifier by itself)
@@ -467,6 +507,33 @@ def evaluate(node, env):
             value = evaluate(node[2], env)
             env[node[1]] = value
             return value
+        elif node[0] == 'COMPOUND_ASSIGN':
+            op_type = node[1]
+            var = node[2]
+            expr_value = evaluate(node[3], env)
+            
+            # Get the current value of the variable (defaulting to 0 if not set)
+            current_value = env.get(var, 0)
+            
+            # Perform the appropriate operation based on the operator type
+            if op_type == TT_PLUS_ASSIGN:
+                result = current_value + expr_value
+            elif op_type == TT_MINUS_ASSIGN:
+                result = current_value - expr_value
+            elif op_type == TT_MULT_ASSIGN:
+                result = current_value * expr_value
+            elif op_type == TT_DIV_ASSIGN:
+                # Handle integer division
+                result = current_value // expr_value if isinstance(current_value, int) else current_value / expr_value
+            elif op_type == TT_MOD_ASSIGN:
+                result = current_value % expr_value
+            else:
+                # This should never happen if parser is correct
+                raise Exception("Unknown compound assignment operator: %s"%token_name(op_type))
+                
+            # Store the result back in the variable and return it
+            env[var] = result
+            return result
         elif node[0] == 'EXPR_STMT':
             # Evaluate the expression and discard the result
             # (For expressions used as statements)
@@ -664,6 +731,31 @@ def test():
             "code": "x = 5 + 3\nprint x",  # Missing semicolon but on different lines - should work
             "expected_env": {"x": 8}
         },
+        # Compound assignment operators tests
+        {
+            "code": "x = 5; x += 3; print x;",
+            "expected_env": {"x": 8}
+        },
+        {
+            "code": "x = 10; x -= 4; print x;",
+            "expected_env": {"x": 6}
+        },
+        {
+            "code": "x = 3; x *= 5; print x;",
+            "expected_env": {"x": 15}
+        },
+        {
+            "code": "x = 20; x /= 4; print x;",
+            "expected_env": {"x": 5}
+        },
+        {
+            "code": "x = 17; x %= 5; print x;",
+            "expected_env": {"x": 2}
+        },
+        {
+            "code": "x = 1; y = 2; x += y; y *= 3; print x; print y;", 
+            "expected_env": {"x": 3, "y": 6}
+        }
     ]
     
     # Test cases that are expected to fail
