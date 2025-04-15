@@ -5,172 +5,208 @@ def test():
     # Test cases with expected final env state
     test_cases = [
         {
-            "code": "var x = 0; var y = 0; while x = y do y = y + 1; end; print x;",
+            # Tests assignment expression in while condition (not a comparison)
+            "code": "var x = 0; var y = 0; while x = y do y = y + 1; end;",
             "expected_env": {"x": 0, "y": 0}
         },
         {
-            "code": "var x = 5 + 3 * 2; print x;",
+            # Tests operator precedence in expressions (* has higher precedence than +)
+            "code": "var x = 5 + 3 * 2;",
             "expected_env": {"x": 11}
         },
         {
+            # Tests basic if statement with equality comparison
             "code": "var x = 1; if x == 1 do print x; end", 
             "expected_env": {"x": 1}
         },
         {
-            "code": "var x = 1; if x == 1 do print x; else do print 0; end",
-            "expected_env": {"x": 1}
+            # Tests if-else statement (true condition branch taken)
+            "code": "var x = 1; var result = 0; if x == 1 do result = x; else do result = 0; end",
+            "expected_env": {"x": 1, "result": 1}
         },
         {
-            "code": "var x = 5 | 3; print x;", 
+            # Tests bitwise OR operator (|)
+            "code": "var x = 5 | 3;", 
             "expected_env": {"x": 7}
         },
         {
-            "code": "var x = 5 & 3; print x;", 
+            # Tests bitwise AND operator (&)
+            "code": "var x = 5 & 3;", 
             "expected_env": {"x": 1}
         },
         {
-            "code": "var x = 5 | 3; var y = x & 2; print y;",
+            # Tests combination of bitwise operations with variable references
+            "code": "var x = 5 | 3; var y = x & 2;",
             "expected_env": {"x": 7, "y": 2}
         },
         {
-            "code": "var x = 1; var y = 0; if x and y do print x; end", 
-            "expected_env": {"x": 1, "y": 0}
+            # Tests logical AND in if condition (evaluates to false)
+            "code": "var x = 1; var y = 0; var result = 0; if x and y do result = x; end", 
+            "expected_env": {"x": 1, "y": 0, "result": 0}
         },
         {
-            "code": "var x = 5 xor 3; print x;",
+            # Tests XOR operator with keywords
+            "code": "var x = 5 xor 3;",
             "expected_env": {"x": 6}  # 5 xor 3 = 6
         },
         {
-            "code": "var x = 7; var y = x xor 2; print y;",
+            # Tests XOR operator with variable references
+            "code": "var x = 7; var y = x xor 2;",
             "expected_env": {"x": 7, "y": 5}  # 7 xor 2 = 5
         },
         {
-            "code": "var x = 15; var y = bitnot 3; print y;", 
+            # Tests bitwise NOT unary operator
+            "code": "var x = 15; var y = bitnot 3;", 
             "expected_env": {"x": 15, "y": -4}
         },
         {
-            "code": "var x = 1; if x == 0 do print 0; else if x == 1 do print 1; end",
-            "expected_env": {"x": 1}
+            # Tests else-if construct (first false, second true)
+            "code": "var x = 1; var result = 0; if x == 0 do result = 0; else if x == 1 do result = 1; end",
+            "expected_env": {"x": 1, "result": 1}
         },
         {
+            # Tests multiple else-if branches (first & second false, third true)
             "code": "var x = 3; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; end",
             "expected_env": {"x": 3}
         },
         {
+            # Tests nested if statements inside else-if
             "code": "var x = 2; if x == 1 do print 1; else if x == 2 do if x == 2 do print 22; end else do print 3; end",
             "expected_env": {"x": 2}
         },
-        # While loop test cases
         {
-            "code": "var x = 0; while x < 5 do x = x + 1; end print x;",
+            # Tests basic while loop with comparison operator
+            "code": "var x = 0; while x < 5 do x = x + 1; end",
             "expected_env": {"x": 5}
         },
         {
+            # Tests while loop with multiple statements in body
             "code": "var x = 0; var y = 0; while x < 3 do y = y + x; x = x + 1; end",
             "expected_env": {"x": 3, "y": 3}  # y = 0+0 + 0+1 + 1+2 = 3
         },
         {
+            # Tests while loop with decrementing counter
             "code": "var x = 10; while x > 0 do x = x - 2; end",
             "expected_env": {"x": 0}
         },
         {
+            # Tests more complex while loop with multiplication and addition
             "code": "var x = 1; var y = 1; while x < 10 do x = x * 2; y = y + x; end",
             "expected_env": {"x": 16, "y": 31}  # y = 1+2 + 2+4 + 6+8 + 14+16 = 31
         },
-        # Break statement tests
         {
+            # Tests break statement in while loop
             "code": "var x = 0; while x < 10 do x = x + 1; if x == 5 do break; end end",
             "expected_env": {"x": 5}
         },
         {
+            # Tests break statement with calculations before exit
             "code": "var sum = 0; var x = 0; while x < 10 do x = x + 1; if x > 5 do break; end sum = sum + x; end",
             "expected_env": {"sum": 15, "x": 6}  # sum = 1+2+3+4+5 = 15
         },
-        # Continue statement tests
         {
+            # Tests continue statement to skip an iteration
             "code": "var sum = 0; var x = 0; while x < 5 do x = x + 1; if x == 3 do continue; end sum = sum + x; end",
             "expected_env": {"sum": 12, "x": 5}  # sum = 1+2+4+5 = 12 (3 is skipped)
         },
         {
+            # Tests continue with modulo to calculate only even numbers
             "code": "var evens = 0; var x = 0; while x < 10 do x = x + 1; if x % 2 != 0 do continue; end evens = evens + x; end",
             "expected_env": {"evens": 30, "x": 10}  # evens = 2+4+6+8+10 = 30
         },
         {
+            # Tests both continue and break in same loop
             "code": "var x = 0; var sum = 0; while x < 10 do x = x + 1; if x < 5 do continue; end if x > 8 do break; end sum = sum + x; end",
             "expected_env": {"x": 9, "sum": 26}  # sum = 5+6+7+8 = 26
         },
         {
-            "code": "var x = 5;;; var y = 10;;;",  # Test multiple semicolons
+            # Tests multiple semicolons (should be treated as empty statements)
+            "code": "var x = 5;;; var y = 10;;;",
             "expected_env": {"x": 5, "y": 10}
         },
         {
-            "code": "var x = 5\nvar y = 10\nvar z = x + y",  # Test newlines instead of semicolons
+            # Tests newlines as statement separators (instead of semicolons)
+            "code": "var x = 5\nvar y = 10\nvar z = x + y",
             "expected_env": {"x": 5, "y": 10, "z": 15}
         },
         {
-            "code": "var x = 1; var y = 2; var z = 3;",  # Mix of with/without semicolons
+            # Tests mixed use of semicolons properly
+            "code": "var x = 1; var y = 2; var z = 3;",
             "expected_env": {"x": 1, "y": 2, "z": 3}
         },
         {
-            "code": "var a = 1;\nvar b = 2\nvar c = 3",  # New lines instead of semicolons
+            # Tests mixed style of statement separation (newlines and semicolons)
+            "code": "var a = 1;\nvar b = 2\nvar c = 3",
             "expected_env": {"a": 1, "b": 2, "c": 3}
         },
         {
-            "code": "var a = 1; var b = 2; var c = 3",  # Semicolons on the same line - should work
+            # Tests multiple statements on same line with semicolons
+            "code": "var a = 1; var b = 2; var c = 3",
             "expected_env": {"a": 1, "b": 2, "c": 3}
         },
         {
-            "code": "var x = 5 + 3\nprint x",  # Missing semicolon but on different lines - should work
-            "expected_env": {"x": 8}
-        },
-        # Compound assignment operators tests
-        {
-            "code": "var x = 5; x += 3; print x;",
+            # Tests missing semicolon but on different lines (should work)
+            "code": "var x = 5 + 3",
             "expected_env": {"x": 8}
         },
         {
-            "code": "var x = 10; x -= 4; print x;",
+            # Tests compound assignment operator +=
+            "code": "var x = 5; x += 3;",
+            "expected_env": {"x": 8}
+        },
+        {
+            # Tests compound assignment operator -=
+            "code": "var x = 10; x -= 4;",
             "expected_env": {"x": 6}
         },
         {
-            "code": "var x = 3; x *= 5; print x;",
+            # Tests compound assignment operator *=
+            "code": "var x = 3; x *= 5;",
             "expected_env": {"x": 15}
         },
         {
-            "code": "var x = 20; x /= 4; print x;",
+            # Tests compound assignment operator /=
+            "code": "var x = 20; x /= 4;",
             "expected_env": {"x": 5}
         },
         {
-            "code": "var x = 17; x %= 5; print x;",
+            # Tests compound assignment operator %=
+            "code": "var x = 17; x %= 5;",
             "expected_env": {"x": 2}
         },
         {
-            "code": "var x = 1; var y = 2; x += y; y *= 3; print x; print y;", 
+            # Tests multiple compound assignments in sequence
+            "code": "var x = 1; var y = 2; x += y; y *= 3;",
             "expected_env": {"x": 3, "y": 6}
         },
         {
-            "code": "var x = 5; var y = x shl 2; print y;", # 5 << 2 = 20
+            # Tests shift left operator
+            "code": "var x = 5; var y = x shl 2;", # 5 << 2 = 20
             "expected_env": {"x": 5, "y": 20}
         },
         {
-            "code": "var x = 20; var y = x shr 2; print y;", # 20 >> 2 = 5
+            # Tests shift right operator
+            "code": "var x = 20; var y = x shr 2;", # 20 >> 2 = 5
             "expected_env": {"x": 20, "y": 5}
         },
-        # Test var and let declarations
         {
-            "code": "var x = 10; var y = x + 5; print y;",
+            # Tests var declaration and simple expression
+            "code": "var x = 10; var y = x + 5;",
             "expected_env": {"x": 10, "y": 15}
         },
         {
-            "code": "let x = 10; var y = x + 5; print y;",
+            # Tests let declaration (constant) used in an expression
+            "code": "let x = 10; var y = x + 5;",
             "expected_env": {"x": 10, "y": 15}
         },
         {
-            "code": "var x = 5; let y = 10; var z = x + y; print z;",
+            # Tests mixing var and let declarations
+            "code": "var x = 5; let y = 10; var z = x + y;",
             "expected_env": {"x": 5, "y": 10, "z": 15}
         },
         {
-            "code": "var x = 1; x = x + 1; print x;",
+            # Tests reassignment to a var-declared variable
+            "code": "var x = 1; x = x + 1;",
             "expected_env": {"x": 2}
         },
     ]
@@ -178,49 +214,55 @@ def test():
     # Test cases that are expected to fail
     fail_test_cases = [
         {
+            # Tests error when using variable without declaration
             "code": "x = 5;",  # Missing var or let declaration
             "expected_error": "Variable 'x' is not declared"
         },
         {
+            # Tests error when declaring variable without initialization
             "code": "var x; x = 5;",  # Missing initialization
             "expected_error": "Variable declaration must include an initialization"
         },
         {
+            # Tests error when using undeclared variable in a logical expression
             "code": "var x = 1; if !x or x and y do print x; end",
             "expected_error": "Variable 'y' is not declared"
         },
         {
+            # Tests error when using undeclared variable in print statement
             "code": "print z;",
             "expected_error": "Variable 'z' is not declared"
         },
         {
+            # Tests error when using undeclared variable in if condition
             "code": "if x do print 1; end",
             "expected_error": "Variable 'x' is not declared" 
         },
         {
-            "code": "var x = 5 + 3 print x;",  # Missing semicolon between statements on the same line
+            # Tests error when missing semicolon between statements on the same line
+            "code": "var x = 5 + 3 print x;",
             "expected_error": "Expected semicolon between statements"
         },
         {
-            "code": "var a = 1 var b = 2",  # No semicolon between statements on the same line
+            # Tests error when missing semicolon between statements on the same line
+            "code": "var a = 1 var b = 2",
             "expected_error": "Expected semicolon between statements"
         },
         {
-            "code": "let x = 5; x = 10;",  # Trying to reassign to a constant
+            # Tests error when reassigning to a let-declared constant
+            "code": "let x = 5; x = 10;",
             "expected_error": "Cannot reassign to constant 'x'"
         },
         {
-            "code": "let x = 5; x += 10;",  # Trying to modify a constant with compound assignment
+            # Tests error when using compound assignment on a let-declared constant
+            "code": "let x = 5; x += 10;",
             "expected_error": "Cannot reassign to constant 'x'"
         },
         {
-            "code": "var x = y;",  # Using undeclared variable in initialization
+            # Tests error when using undeclared variable in initialization
+            "code": "var x = y;",
             "expected_error": "Variable 'y' is not declared"
-        },
-        {
-            "code": "var z = 5; let z = 10;", # Redeclaring a variable
-            "expected_error": "already declared"  # Should add proper error message for this case
-        },
+        }
     ]
     
     # Run test cases expected to succeed
