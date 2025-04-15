@@ -51,7 +51,8 @@ KEYWORDS = {
 
 # Global precedence table for binary operators
 BINARY_PRECEDENCE = {
-    TT_OR: 10,      # lowest precedence
+    TT_ASSIGN: 5, # lowest precedence
+    TT_OR: 10,
     TT_AND: 20,
     TT_BITOR: 30,
     TT_XOR: 40,
@@ -268,8 +269,13 @@ class Parser:
             return ('NUM', t.value)
         if t.type == TT_IDENT:
             var_name = t.value
-            if var_name not in self.variables:
+            # For a variable in an expression context:
+            # 1. If it's already registered, we can use its value
+            # 2. If not, we'll register it now - it might be the left side of an assignment
+            if var_name not in self.variables and self.token.type != TT_ASSIGN:
+                # Only error if we're not about to see an assignment
                 self.error("Variable '%s' is not defined" % var_name)
+            self.variables.add(var_name)  # Register variable
             return ('VAR', var_name)
         if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
             return ('UNARY', t.value, self.expression(UNARY_PRECEDENCE))
@@ -280,6 +286,13 @@ class Parser:
         raise Exception('Unexpected token type %d' % t.type)
 
     def led(self, t, left):
+        # Handle assignment as an operator
+        if t.type == TT_ASSIGN and left[0] == 'VAR':
+            # Get variable name from left side
+            var_name = left[1]
+            # Parse the right side expression
+            right = self.expression(0)
+            return ('ASSIGN', var_name, right)
         if t.type in [TT_PLUS, TT_MINUS, TT_MULT, TT_DIV, TT_MOD]:
             return ('BINOP', t.value, left, self.expression(self.lbp(t)))
         elif t.type in [TT_EQ, TT_NE, TT_GE, TT_LE, TT_LT, TT_GT]:
@@ -453,6 +466,10 @@ def should_fail(text):
 def test():
     # Test cases with expected final env state
     test_cases = [
+        {
+            "code": "x = 0; y = 0; while x = y do y = y + 1; end; print x;",
+            "expected_env": {"x": 0, "y": 0}
+        },
         {
             "code": "x = 5 + 3 * 2; print x;",
             "expected_env": {"x": 11}
