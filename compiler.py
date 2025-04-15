@@ -40,6 +40,9 @@ TT_DIV_ASSIGN = 36
 TT_MOD_ASSIGN = 37
 TT_SHR = 38
 TT_SHL = 39
+# New token types for variable declarations
+TT_VAR = 40
+TT_LET = 41
 
 # Global hashtable for keywords
 KEYWORDS = {
@@ -57,6 +60,8 @@ KEYWORDS = {
     'bitnot': TT_BITNOT,
     'shl': TT_SHL,
     'shr': TT_SHR,
+    'var': TT_VAR,  # New keyword for variable declaration
+    'let': TT_LET,  # New keyword for constant declaration
 }
 
 # Global precedence table for binary operators
@@ -303,6 +308,7 @@ class Parser:
         self.token = self.lexer.next_token() # Current token
         self.prev_token = None  # Previous token (for better error messages)
         self.variables = set()  # Track declared variables
+        self.constants = set()  # Track constants (let declarations)
 
     def error(self, message):
         token_type_name = token_name(self.token.type)
@@ -341,12 +347,9 @@ class Parser:
         if t.type == TT_IDENT:
             var_name = t.value
             # For a variable in an expression context:
-            # 1. If it's already registered, we can use its value
-            # 2. If not, we'll register it now - it might be the left side of an assignment
-            if var_name not in self.variables and self.token.type != TT_ASSIGN:
-                # Only error if we're not about to see an assignment
-                self.error("Variable '%s' is not defined" % var_name)
-            self.variables.add(var_name)  # Register variable
+            # Check if variable has been declared
+            if var_name not in self.variables:
+                self.error("Variable '%s' is not declared" % var_name)
             return ('VAR', var_name)
         if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
             return ('UNARY', t.value, self.expression(UNARY_PRECEDENCE))
@@ -361,6 +364,11 @@ class Parser:
         if t.type == TT_ASSIGN and left[0] == 'VAR':
             # Get variable name from left side
             var_name = left[1]
+            
+            # Check if variable is a constant (declared with 'let')
+            if var_name in self.constants:
+                self.error("Cannot reassign to constant '%s'" % var_name)
+                
             # Parse the right side expression
             right = self.expression(0)
             return ('ASSIGN', var_name, right)
@@ -379,6 +387,37 @@ class Parser:
         if self.token.type == TT_SEMI:
             self.advance()  # Skip the semicolon
             return ('EMPTY',)  # Return an empty statement node
+        
+        # Handle variable declarations (var and let)
+        if self.token.type in [TT_VAR, TT_LET]:
+            decl_type = self.token.type  # Save the declaration type (var or let)
+            self.advance()
+            
+            # Expect an identifier after var/let
+            if self.token.type != TT_IDENT:
+                self.error("Expected identifier after '%s'" % ('var' if decl_type == TT_VAR else 'let'))
+                
+            var_name = self.token.value
+            self.advance()
+            
+            # Expect an assignment for variable declaration (no bare declarations allowed)
+            if self.token.type != TT_ASSIGN:
+                self.error("Variable declaration must include an initialization")
+                
+            self.advance()  # Skip the = sign
+            
+            # Parse the initializer expression
+            expr = self.expression(0)
+            
+            # Register the variable as defined
+            self.variables.add(var_name)
+            
+            # If this is a constant declaration (let), add it to constants set
+            if decl_type == TT_LET:
+                self.constants.add(var_name)
+                
+            self.check_statement_end()
+            return ('VAR_DECL', decl_type, var_name, expr)
             
         if self.token.type == TT_IF:
             self.advance()
@@ -429,11 +468,18 @@ class Parser:
         elif self.token.type == TT_IDENT:
             var = self.token.value
             self.advance()
-            self.variables.add(var)  # Register variable as defined
             
+            # Check if variable has been declared
+            if var not in self.variables:
+                self.error("Variable '%s' is not declared" % var)
+                
             # Handle all assignment operators (regular and compound)
             if self.token.type in [TT_ASSIGN, TT_PLUS_ASSIGN, TT_MINUS_ASSIGN, 
                                   TT_MULT_ASSIGN, TT_DIV_ASSIGN, TT_MOD_ASSIGN]:
+                # Check if variable is a constant (declared with 'let')
+                if var in self.constants:
+                    self.error("Cannot reassign to constant '%s'" % var)
+                    
                 op = self.token.type
                 op_value = self.token.value
                 self.advance()
@@ -494,6 +540,12 @@ def evaluate(node, env):
             raise BreakException()
         elif node[0] == 'CONTINUE':
             raise ContinueException()
+        elif node[0] == 'VAR_DECL':
+            # Variable declaration node: ('VAR_DECL', decl_type, var_name, expr)
+            var_name = node[2]
+            value = evaluate(node[3], env)
+            env[var_name] = value
+            return value
         elif node[0] == 'BINOP':
             left = evaluate(node[2], env)
             right = evaluate(node[3], env)
@@ -620,4 +672,3 @@ TOKEN_NAMES = {v: k for k, v in globals().items() if k.startswith('TT_')}
 def token_name(token_type):
     """Convert a token type number to its name for better debugging"""
     return TOKEN_NAMES.get(token_type, str(token_type))
-
