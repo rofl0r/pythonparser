@@ -48,9 +48,9 @@ class VariableNode(ASTNode):
         self.expr_type = var_type
 
     def eval(self, env):
-        if self.name not in env:
+        if not env.has(self.name):
             raise CompilerException("Variable '%s' is not defined" % self.name)
-        return env[self.name]
+        return env.get(self.name)
 
     def __repr__(self):
         return "Var(%s, %s)" % (self.name, var_type_to_string(self.expr_type))
@@ -133,7 +133,7 @@ class AssignNode(ASTNode):
         if self.expr.node_type == AST_NODE_NUMBER:
             value = promote_literal_if_needed(value, self.expr.expr_type, self.expr_type)
         
-        env[self.var_name] = value
+        env.set(self.var_name, value)
         return value
 
     def __repr__(self):
@@ -150,7 +150,7 @@ class CompoundAssignNode(ASTNode):
         self.expr_type = var_type
 
     def eval(self, env):
-        current_value = env.get(self.var_name, 0)
+        current_value = env.get(self.var_name)
         expr_value = self.expr.eval(env)
         
         if self.op_type == TT_PLUS_ASSIGN:
@@ -158,8 +158,9 @@ class CompoundAssignNode(ASTNode):
             if self.expr_type == TYPE_STRING:
                 if self.expr.expr_type != TYPE_STRING:
                     raise CompilerException("Cannot use += with string and %s" % var_type_to_string(self.expr.expr_type))
-                return env.update({self.var_name: current_value + expr_value}) or (current_value + expr_value)
-            result = add(current_value, expr_value, self.expr_type, self.expr.expr_type)
+                result = current_value + expr_value
+            else:
+                result = add(current_value, expr_value, self.expr_type, self.expr.expr_type)
         elif self.op_type == TT_MINUS_ASSIGN:
             result = subtract(current_value, expr_value, self.expr_type, self.expr.expr_type)
         elif self.op_type == TT_MULT_ASSIGN:
@@ -169,8 +170,7 @@ class CompoundAssignNode(ASTNode):
         elif self.op_type == TT_MOD_ASSIGN:
             result = modulo(current_value, expr_value, self.expr_type, self.expr.expr_type)
             
-            
-        env[self.var_name] = result
+        env.set(self.var_name, result)
         return result
 
     def __repr__(self):
@@ -300,7 +300,7 @@ class VarDeclNode(ASTNode):
             # No actual value transformation needed for most numeric types
             pass
         
-        env[self.var_name] = value
+        env.set(self.var_name, value)
         return value
 
     def __repr__(self):
@@ -330,7 +330,7 @@ class FunctionDeclNode(ASTNode):
 
     def eval(self, env):
         # Store function in the environment
-        env[self.name] = self
+        env.set(self.name, self)
         return 0
 
     def __repr__(self):
@@ -367,44 +367,51 @@ class FunctionCallNode(ASTNode):
         self.expr_type = TYPE_UNKNOWN  # Will be set during type checking
 
     def eval(self, env):
-        # Get function from environment
-        if self.name not in env:
+        # Get function from function map
+        if not env.has_function(self.name):
             raise CompilerException("Function '%s' is not defined" % self.name)
         
-        func = env[self.name]
+        func = env.get_function(self.name)
         if not isinstance(func, FunctionDeclNode):
             raise CompilerException("'%s' is not a function" % self.name)
         
-        # Create a new local scope for function execution
-        local_env = Environment(parent=env)
+        # Enter a new scope for function execution
+        env.enter_scope()
         
         # Evaluate arguments and bind to parameters
         if len(self.args) != len(func.params):
+            env.leave_scope()  # Clean up before raising exception
             raise CompilerException("Function '%s' expects %d arguments, got %d" % 
                                   (self.name, len(func.params), len(self.args)))
         
         for (param_name, param_type), arg in zip(func.params, self.args):
             arg_value = arg.eval(env)
-            local_env[param_name] = arg_value
+            env.set(param_name, arg_value)
+        
+        result = None  # Default return value for void functions
         
         try:
             # Execute function body
             for stmt in func.body:
-                stmt.eval(local_env)
+                stmt.eval(env)
             
             # If no return statement was encountered and function is not void,
             # we should raise an error
             if func.return_type != TYPE_VOID:
+                env.leave_scope()  # Clean up before raising exception
                 raise CompilerException("Function '%s' has non-void return type but reached end of function without return" % self.name)
             
-            # For void functions, return None
-            return None
         except ReturnException as ret:
             # Check return value type against function's return type
             if func.return_type == TYPE_VOID and ret.value is not None:
+                env.leave_scope()  # Clean up before raising exception
                 raise CompilerException("Void function '%s' returned a value" % self.name)
             
-            return ret.value
+            result = ret.value
+        
+        # Leave function scope
+        env.leave_scope()
+        return result
 
     def __repr__(self):
         args_str = ", ".join(repr(arg) for arg in self.args)
@@ -845,17 +852,61 @@ class ContinueException(Exception):
     """Raised when a continue statement is encountered"""
     pass
 
-class Environment(dict):
-    def __init__(self, parent=None):
-        dict.__init__(self)
-        self.parent = parent
+class EnvironmentStack:
+    """Stack-based environment implementation with support for scopes"""
+    def __init__(self):
+        self.stack = [{}]  # Start with global scope at index 0
+        self.stackptr = 0
+        self.function_map = {}  # Map of function names to function nodes
+        
+    def enter_scope(self):
+        """Enter a new scope - reuse existing or create new one"""
+        self.stackptr += 1
+        if self.stackptr >= len(self.stack):
+            self.stack.append({})
+        else:
+            # Reuse existing dict but clear it
+            self.stack[self.stackptr].clear()
     
-    def __getitem__(self, key):
-        if key in self:
-            return dict.__getitem__(self, key)
-        elif self.parent:
-            return self.parent[key]
-        raise KeyError(key)
+    def leave_scope(self):
+        """Leave current scope and return to previous"""
+        if self.stackptr > 0:
+            self.stackptr -= 1
+    
+    def get(self, name):
+        """Get a variable value looking through all accessible scopes"""
+        # Search from current scope down to global
+        for i in range(self.stackptr, -1, -1):
+            if name in self.stack[i]:
+                return self.stack[i][name]
+        raise KeyError(name)
+    
+    def has(self, name):
+        """Check if a variable exists in any accessible scope"""
+        for i in range(self.stackptr, -1, -1):
+            if name in self.stack[i]:
+                return True
+        return False
+    
+    def set(self, name, value):
+        """Set a variable in the current scope"""
+        self.stack[self.stackptr][name] = value
+    
+    def register_function(self, name, func_node):
+        """Register a function in the function map"""
+        self.function_map[name] = func_node
+    
+    def has_function(self, name):
+        """Check if a function exists in the function map"""
+        return name in self.function_map
+    
+    def get_function(self, name):
+        """Get a function from the function map"""
+        return self.function_map[name]
+
+def is_literal_node(node):
+    """Check if a node represents a literal value (for global var init)"""
+    return node.node_type in [AST_NODE_NUMBER, AST_NODE_STRING]
 
 class Parser:
     def __init__(self, lexer):
@@ -868,6 +919,9 @@ class Parser:
         self.variables = {"global": set()}  # Track declared variables per scope
         self.constants = {"global": set()}  # Track constants (let declarations) per scope
         self.var_types = {"global": {}}     # Track variable types per scope
+        
+        # Track if we've seen functions - used to enforce globals-before-functions rule
+        self.seen_function = False
         
         self.functions = {}     # Track function declarations (name -> (params, return_type))
         self.current_function = None  # Track current function for return checking
@@ -976,6 +1030,9 @@ class Parser:
 
     def function_declaration(self):
         """Parse a function declaration"""
+        # Mark that we've seen a function - used to enforce globals-before-functions rule
+        self.seen_function = True
+        
         self.advance()  # Skip 'def'
         
         # Parse function name
@@ -1240,6 +1297,13 @@ class Parser:
                 # Parse the initializer expression
                 expr = self.expression(0)
                 
+                # In global scope, ensure only literal initializers
+                if self.current_function is None and self.seen_function:
+                    self.error("Global variables must be declared before any functions")
+                
+                if self.current_function is None and not is_literal_node(expr):
+                    self.error("Global variables can only be initialized with literals")
+                    
                 # Infer the type from expression
                 if expr.node_type == AST_NODE_NUMBER:
                     var_type = expr.expr_type
@@ -1264,6 +1328,13 @@ class Parser:
                 
                 # Parse the initializer expression
                 expr = self.expression(0)
+                
+                # In global scope, ensure only literal initializers
+                if self.current_function is None and self.seen_function:
+                    self.error("Global variables must be declared before any functions")
+                
+                if self.current_function is None and not is_literal_node(expr):
+                    self.error("Global variables can only be initialized with literals")
                 
                 # Check type compatibility with expression type
                 if expr.expr_type != TYPE_UNKNOWN and var_type != expr.expr_type and not can_promote(expr.expr_type, var_type):
@@ -1426,6 +1497,11 @@ class Parser:
             expr = self.expression(0)
             self.check_statement_end()
             return ExprStmtNode(expr)
+            
+        # If we're in global scope and not at a var/let/function declaration, error
+        if self.current_function is None:
+            self.error("Only variable declarations and function declarations are allowed in global scope")
+            
         token_type_name = token_name(self.token.type)
         self.error('Invalid statement starting with "%s" (%s)' %
                   (self.token.value, token_type_name))
@@ -1453,51 +1529,60 @@ class Parser:
 
 def run(text):
     lexer = Lexer(text)
-    parser = Parser(lexer) 
+    parser = Parser(lexer)
     try:
         # Parse the program
         program = parser.parse()
         ast = program
         
-        # Create environment for execution
-        env = Environment()
+        # Create environment stack for execution
+        env = EnvironmentStack()
         
-        # Check if there are any non-function declarations in global scope
-        has_global_code = False
+        # First execute global variable declarations
         for node in program:
-            if node.node_type != AST_NODE_FUNCTION_DECL:
-                has_global_code = True
-                break
-        
-        if has_global_code:
-            return {'success': False, 'error': 'Code outside of functions is not allowed', 'ast': ast}
-        
-        # First process all function declarations
-        for node in program:
-            if node.node_type == AST_NODE_FUNCTION_DECL:
+            if node.node_type == AST_NODE_VAR_DECL:
                 node.eval(env)
         
+        # Register functions in the function map (but don't execute them)
+        for node in program:
+            if node.node_type == AST_NODE_FUNCTION_DECL:
+                env.register_function(node.name, node)
+        
         # Check if main function exists
-        if "main" not in env:
+        if not env.has_function("main"):
             return {'success': False, 'error': "No 'main' function defined", 'ast': ast}
         
-        # Execute main function
-        main_func = env["main"]
-        if not isinstance(main_func, FunctionDeclNode):
-            return {'success': False, 'error': "'main' is not a function", 'ast': ast}
+        # Get main function
+        main_func = env.get_function("main")
         
         # Make sure main has no parameters
         if len(main_func.params) > 0:
             return {'success': False, 'error': "Function 'main' cannot have parameters", 'ast': ast}
         
+        # Create a new scope for main function
+        env.enter_scope()
+        
         try:
-            # Create a scope for main function
-            local_env = Environment(parent=env)
+            # Execute main function
             for stmt in main_func.body:
-                stmt.eval(local_env)
+                stmt.eval(env)
                 
-            return {'success': True, 'env': env, 'ast': ast}
+            # Return both global and main's environment
+            return {
+                'success': True,
+                'global_env': env.stack[0],
+                'main_env': env.stack[1],
+                'ast': ast
+            }
         except ReturnException as ret:
-            return {'success': True, 'result': ret.value, 'env': env, 'ast': ast}
+            # If main returns a value, include it in the result
+            return {
+                'success': True,
+                'result': ret.value,
+                'global_env': env.stack[0],
+                'main_env': env.stack[1],
+                'ast': ast
+            }
     except CompilerException as e:
         return {'success': False, 'error': str(e), 'ast': None}
+                  

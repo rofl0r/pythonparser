@@ -340,10 +340,68 @@ def test():
             """,
             "expected_env": {"s1": "test", "s2": "test", "result": 1}
         },
+        {
+            # Tests functions and return statements
+            "code": """
+                def add(a:int, b:int):int do
+                    return a + b;
+                end
+                
+                def main() do
+                    var x := 10;
+                    var y := 20;
+                    var result := add(x, y);
+                    print result;
+                end
+            """,
+            "expected_env": {"x": 10, "y": 20, "result": 30}
+        },
+        {
+            # Tests function with return value specification
+            "code": """
+                def square(n:int):int do
+                    return n * n;
+                end
+                
+                def main() do
+                    var x := 5;
+                    var y := square(x);
+                    print y;
+                end
+            """,
+            "expected_env": {"x": 5, "y": 25}
+        },
+        {
+            # Tests global variables
+            "code": """
+                var global_rw:=0
+                let global_r:=42
+                def main() do global_rw:=10; var x:=global_rw + global_r
+                end
+            """,
+            "expected_env": {"x": 52}
+        },
 
 
         # Test cases that are expected to fail
         # Each has "code" and "expected_error"
+        {
+            # Tests invalid use of := operator
+            "code": """
+                def main() do var x:=10; x:=20 // x is already declared, so := must fail
+                end
+            """,
+            "expected_error": "Cannot use type inference operator on already declared variable 'x'"
+        },
+        {
+            # Tests invalid redeclaration of variable
+            "code": """
+                def main() do var x:=10; var x:=20 // x is already declared, so "var x" must fail
+                end
+            """,
+            "expected_error": "Variable 'x' already declared"
+        },
+
 
         {
             # Tests error when trying to assign float to int
@@ -488,37 +546,6 @@ def test():
             "code": "var x := 5;",
             "expected_error": "Code outside of functions is not allowed"
         },
-        {
-            # Tests functions and return statements
-            "code": """
-                def add(a:int, b:int):int do
-                    return a + b;
-                end
-                
-                def main() do
-                    var x := 10;
-                    var y := 20;
-                    var result := add(x, y);
-                    print result;
-                end
-            """,
-            "expected_env": {"x": 10, "y": 20, "result": 30}
-        },
-        {
-            # Tests function with return value specification
-            "code": """
-                def square(n:int):int do
-                    return n * n;
-                end
-                
-                def main() do
-                    var x := 5;
-                    var y := square(x);
-                    print y;
-                end
-            """,
-            "expected_env": {"x": 5, "y": 25}
-        },
     ]
 
     # List to track failing tests
@@ -553,14 +580,9 @@ def test():
                     # This is likely from a function return
                     print("Function returned: %s" % result['result'])
                 
-                # Get local environment from main function
-                if 'env' in result:
-                    for key in result['env']:
-                        main_func = result['env'].get(key)
-                        if isinstance(main_func, FunctionDeclNode) and main_func.name == 'main':
-                            env = result['env']
-                            break
-                
+                # Get environment from main function
+		env = result['main_env']
+
                 # Check if environment values match
                 env_match = True
                 for k, v in test_case["expected_env"].iteritems():
