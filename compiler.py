@@ -13,6 +13,9 @@ class ASTNode(object):
     def eval(self, env):
         raise CompilerException("Evaluation not implemented for this node")
 
+    def __repr__(self):
+        return "%s" % ast_node_type_to_string(self.node_type)
+
 class NumberNode(ASTNode):
     def __init__(self, value, expr_type):
         ASTNode.__init__(self, AST_NODE_NUMBER)
@@ -22,6 +25,9 @@ class NumberNode(ASTNode):
     def eval(self, env):
         return self.value
 
+    def __repr__(self):
+        return "Number(%s, %s)" % (self.value, var_type_to_string(self.expr_type))
+
 class StringNode(ASTNode):
     def __init__(self, value):
         ASTNode.__init__(self, AST_NODE_STRING)
@@ -30,6 +36,9 @@ class StringNode(ASTNode):
 
     def eval(self, env):
         return self.value
+
+    def __repr__(self):
+        return "String(\"%s\")" % self.value
 
 class VariableNode(ASTNode):
     def __init__(self, name, var_type):
@@ -41,6 +50,9 @@ class VariableNode(ASTNode):
         if self.name not in env:
             raise CompilerException("Variable '%s' is not defined" % self.name)
         return env[self.name]
+
+    def __repr__(self):
+        return "Var(%s, %s)" % (self.name, var_type_to_string(self.expr_type))
 
 class BinaryOpNode(ASTNode):
     def __init__(self, operator, left, right, result_type):
@@ -73,6 +85,12 @@ class BinaryOpNode(ASTNode):
         elif self.operator == 'shr':
             return shift_right(left_val, right_val, self.left.expr_type, self.right.expr_type)
 
+    def __repr__(self):
+        return "BinaryOp(%s, %s, %s) -> %s" % (
+            self.operator, repr(self.left), repr(self.right),
+            var_type_to_string(self.expr_type)
+        )
+
 class UnaryOpNode(ASTNode):
     def __init__(self, operator, operand, result_type):
         ASTNode.__init__(self, AST_NODE_UNARY_OP)
@@ -89,6 +107,11 @@ class UnaryOpNode(ASTNode):
             return logical_not(value)
         elif self.operator == 'bitnot':
             return bitwise_not(value, self.operand.expr_type)
+
+    def __repr__(self):
+        return "UnaryOp(%s, %s) -> %s" % (
+            self.operator, repr(self.operand), var_type_to_string(self.expr_type)
+        )
 
 class AssignNode(ASTNode):
     def __init__(self, var_name, expr, var_type):
@@ -111,6 +134,11 @@ class AssignNode(ASTNode):
         
         env[self.var_name] = value
         return value
+
+    def __repr__(self):
+        return "Assign(%s, %s) -> %s" % (
+            self.var_name, repr(self.expr), var_type_to_string(self.expr_type)
+        )
 
 class CompoundAssignNode(ASTNode):
     def __init__(self, op_type, var_name, expr, var_type):
@@ -144,6 +172,12 @@ class CompoundAssignNode(ASTNode):
         env[self.var_name] = result
         return result
 
+    def __repr__(self):
+        op_name = token_name(self.op_type)
+        return "CompoundAssign(%s, %s, %s) -> %s" % (
+            op_name, self.var_name, repr(self.expr), var_type_to_string(self.expr_type)
+        )
+
 class PrintNode(ASTNode):
     def __init__(self, expr):
         ASTNode.__init__(self, AST_NODE_PRINT)
@@ -153,6 +187,9 @@ class PrintNode(ASTNode):
         value = self.expr.eval(env)
         print(value)
         return value
+
+    def __repr__(self):
+        return "Print(%s)" % repr(self.expr)
 
 class IfNode(ASTNode):
     def __init__(self, condition, then_body, else_body=None):
@@ -169,6 +206,19 @@ class IfNode(ASTNode):
             for stmt in self.else_body:
                 stmt.eval(env)
         return 0
+
+    def __repr__(self):
+        if self.else_body:
+            return "If(%s, [%s], [%s])" % (
+                repr(self.condition),
+                ", ".join(repr(stmt) for stmt in self.then_body),
+                ", ".join(repr(stmt) for stmt in self.else_body),
+            )
+        else:
+            return "If(%s, [%s])" % (
+                repr(self.condition),
+                ", ".join(repr(stmt) for stmt in self.then_body),
+            )
 
 class WhileNode(ASTNode):
     def __init__(self, condition, body):
@@ -190,12 +240,21 @@ class WhileNode(ASTNode):
                 break
         return 0
 
+    def __repr__(self):
+        return "While(%s, [%s])" % (
+            repr(self.condition),
+            ", ".join(repr(stmt) for stmt in self.body),
+        )
+
 class BreakNode(ASTNode):
     def __init__(self):
         ASTNode.__init__(self, AST_NODE_BREAK)
 
     def eval(self, env):
         raise BreakException()
+
+    def __repr__(self):
+        return "Break()"
 
 class ContinueNode(ASTNode):
     def __init__(self):
@@ -204,6 +263,9 @@ class ContinueNode(ASTNode):
     def eval(self, env):
         raise ContinueException()
 
+    def __repr__(self):
+        return "Continue()"
+
 class ExprStmtNode(ASTNode):
     def __init__(self, expr):
         ASTNode.__init__(self, AST_NODE_EXPR_STMT)
@@ -211,6 +273,9 @@ class ExprStmtNode(ASTNode):
 
     def eval(self, env):
         return self.expr.eval(env)
+
+    def __repr__(self):
+        return "ExprStmt(%s)" % repr(self.expr)
 
 class VarDeclNode(ASTNode):
     def __init__(self, decl_type, var_name, var_type, expr):
@@ -237,12 +302,21 @@ class VarDeclNode(ASTNode):
         env[self.var_name] = value
         return value
 
+    def __repr__(self):
+        decl_type_str = "var" if self.decl_type == TT_VAR else "let"
+        return "VarDecl(%s, %s, %s, %s)" % (
+            decl_type_str, self.var_name, var_type_to_string(self.var_type), repr(self.expr)
+        )
+
 class EmptyNode(ASTNode):
     def __init__(self):
         ASTNode.__init__(self, AST_NODE_EMPTY)
 
     def eval(self, env):
         return 0
+
+    def __repr__(self):
+        return "Empty()"
 
 class CompareNode(ASTNode):
     def __init__(self, operator, left, right):
@@ -282,6 +356,9 @@ class CompareNode(ASTNode):
         elif self.operator == '<=':
             return compare_le(left_val, right_val, self.left.expr_type, self.right.expr_type)
 
+    def __repr__(self):
+        return "Compare(%s, %s, %s)" % (self.operator, repr(self.left), repr(self.right))
+
 class LogicalNode(ASTNode):
     def __init__(self, operator, left, right):
         ASTNode.__init__(self, AST_NODE_LOGICAL)
@@ -297,6 +374,9 @@ class LogicalNode(ASTNode):
             return logical_and(left_val, self.right.eval(env))
         elif self.operator == 'or':
             return logical_or(left_val, self.right.eval(env))
+
+    def __repr__(self):
+        return "Logical(%s, %s, %s)" % (self.operator, repr(self.left), repr(self.right))
 
 class BitOpNode(ASTNode):
     def __init__(self, operator, left, right):
@@ -316,6 +396,9 @@ class BitOpNode(ASTNode):
             return bitwise_or(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == 'xor':
             return bitwise_xor(left_val, right_val, self.left.expr_type, self.right.expr_type)
+
+    def __repr__(self):
+        return "BitOp(%s, %s, %s)" % (self.operator, repr(self.left), repr(self.right))
 
 class Token:
     def __init__(self, type, value, line=0, column=0):
