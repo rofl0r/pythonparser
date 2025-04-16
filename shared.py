@@ -109,7 +109,7 @@ def can_promote(src_type, dst_type):
     # Int literal special case - can promote to any other type 
     # This allows writing var x:uint = 42; without having to add the 'u' suffix
     if src_type == TYPE_INT:
-        return True
+        return dst_type != TYPE_STRING
         
     # For other types, only allow promotion to higher precedence types
     src_prec = TYPE_PRECEDENCE.index(src_type) if src_type in TYPE_PRECEDENCE else -1

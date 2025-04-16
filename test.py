@@ -418,7 +418,7 @@ def test():
                 var i := 123;
                 var result := s + i;
             """,
-            "expected_error": "Cannot concatenate string with non-string type"
+            "expected_error": "Type mismatch in binary operation: string and int"
         },
         {
             "name": "String comparison error - unsupported operator",
@@ -427,7 +427,7 @@ def test():
                 var s2 := "def";
                 if s1 < s2 do print "s1 is less"; end
             """,
-            "expected_error": "not supported for strings"
+            "expected_error": "Operator < not supported for strings"
         },
         {
             "name": "String compound assignment error",
@@ -436,14 +436,14 @@ def test():
                 var i := 5;
                 s += i;
             """,
-            "expected_error": "Cannot use += with string and int"
+            "expected_error": "Type mismatch: can't assign a value of type int to s (type string)"
         },
         {
             "name": "Invalid assignment from int to string",
             "code": """
                 var s : string = 42;
             """,
-            "expected_error": "Cannot assign int value to string variable"
+            "expected_error": "Type mismatch in initialization: can't assign int to s (type string)"
         },
     ]
 
