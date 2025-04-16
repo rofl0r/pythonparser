@@ -57,6 +57,8 @@ TT_TYPE_ULONG = 50
 TT_UINT_LITERAL = 51
 TT_LONG_LITERAL = 52
 TT_ULONG_LITERAL = 53
+TT_STRING_LITERAL = 54
+TT_TYPE_STRING = 55
 
 # AST Node types (C-style enums)
 AST_NODE_BASE = 0
@@ -77,6 +79,7 @@ AST_NODE_EMPTY = 14
 AST_NODE_COMPARE = 15
 AST_NODE_LOGICAL = 16
 AST_NODE_BITOP = 17
+AST_NODE_STRING = 18
 
 # Variable types
 TYPE_UNKNOWN = 0
@@ -85,9 +88,10 @@ TYPE_FLOAT = 2
 TYPE_UINT = 3
 TYPE_LONG = 4
 TYPE_ULONG = 5
+TYPE_STRING = 6
 
 # Order of type precedence (highest to lowest)
-TYPE_PRECEDENCE = [TYPE_FLOAT, TYPE_ULONG, TYPE_LONG, TYPE_UINT, TYPE_INT]
+TYPE_PRECEDENCE = [TYPE_STRING, TYPE_FLOAT, TYPE_ULONG, TYPE_LONG, TYPE_UINT, TYPE_INT]
 
 # Type promotion helper functions
 def can_promote(src_type, dst_type):
@@ -119,7 +123,8 @@ TYPE_TO_STRING_MAP = {
     TYPE_FLOAT: "float",
     TYPE_UINT: "uint",
     TYPE_LONG: "long",
-    TYPE_ULONG: "ulong"
+    TYPE_ULONG: "ulong",
+    TYPE_STRING: "string"
 }
 
 # Mapping from token types to variable types
@@ -128,7 +133,8 @@ TOKEN_TO_TYPE_MAP = {
     TT_FLOAT_LITERAL: TYPE_FLOAT,
     TT_UINT_LITERAL: TYPE_UINT,
     TT_LONG_LITERAL: TYPE_LONG,
-    TT_ULONG_LITERAL: TYPE_ULONG
+    TT_ULONG_LITERAL: TYPE_ULONG,
+    TT_STRING_LITERAL: TYPE_STRING
 }
 
 # Mapping from type tokens to variable types
@@ -137,7 +143,8 @@ TYPE_TOKEN_MAP = {
     TT_TYPE_FLOAT: TYPE_FLOAT,
     TT_TYPE_UINT: TYPE_UINT,
     TT_TYPE_LONG: TYPE_LONG,
-    TT_TYPE_ULONG: TYPE_ULONG
+    TT_TYPE_ULONG: TYPE_ULONG,
+    TT_TYPE_STRING: TYPE_STRING
 }
 
 # Global hashtable for keywords
@@ -163,6 +170,7 @@ KEYWORDS = {
     'uint': TT_TYPE_UINT,  # Unsigned Int type
     'long': TT_TYPE_LONG,  # Long type
     'ulong': TT_TYPE_ULONG,  # Unsigned Long type
+    'string': TT_TYPE_STRING,  # String type
 }
 
 # Global precedence table for binary operators
@@ -215,7 +223,8 @@ def ast_node_type_to_string(node_type):
         AST_NODE_EMPTY: "EMPTY",
         AST_NODE_COMPARE: "COMPARE",
         AST_NODE_LOGICAL: "LOGICAL",
-        AST_NODE_BITOP: "BITOP"
+        AST_NODE_BITOP: "BITOP",
+        AST_NODE_STRING: "STRING"
     }
     return type_names.get(node_type, "UNKNOWN")
 
@@ -283,6 +292,8 @@ TOKEN_NAMES = {
     TT_UINT_LITERAL: "TT_UINT_LITERAL",
     TT_LONG_LITERAL: "TT_LONG_LITERAL",
     TT_ULONG_LITERAL: "TT_ULONG_LITERAL",
+    TT_STRING_LITERAL: "TT_STRING_LITERAL",
+    TT_TYPE_STRING: "TT_TYPE_STRING",
 }
 
 def token_name(token_type):
@@ -293,4 +304,3 @@ def token_name(token_type):
 class CompilerException(Exception):
     """Base class for all exceptions raised by the compiler"""
     pass
-

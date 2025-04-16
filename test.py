@@ -243,6 +243,76 @@ def test():
            """,
            "expected_env": {"a": 5, "b": 10, "c": 15}
         },
+        # String test cases
+        {
+            "name": "Basic string declaration",
+            "code": """
+                var s := "Hello, world!";
+                print s;
+            """,
+            "expected_env": {"s": "Hello, world!"}
+        },
+        {
+            "name": "String with explicit type annotation",
+            "code": """
+                var s : string = "Hello";
+                print s;
+            """,
+            "expected_env": {"s": "Hello"}
+        },
+        {
+            "name": "String concatenation",
+            "code": """
+                var s1 := "Hello, ";
+                var s2 := "world!";
+                var s3 := s1 + s2;
+                print s3;
+            """,
+            "expected_env": {"s1": "Hello, ", "s2": "world!", "s3": "Hello, world!"}
+        },
+        {
+            "name": "String compound assignment",
+            "code": """
+                var s := "Hello";
+                s += ", world!";
+                print s;
+            """,
+            "expected_env": {"s": "Hello, world!"}
+        },
+        {
+            "name": "String comparison equality",
+            "code": """
+                var s1 := "abc";
+                var s2 := "abc";
+                var result := s1 == s2;
+                print result;
+            """,
+            "expected_env": {"s1": "abc", "s2": "abc", "result": 1}
+        },
+        {
+            "name": "String comparison inequality",
+            "code": """
+                var s1 := "abc";
+                var s2 := "def";
+                var result := s1 != s2;
+                print result;
+            """,
+            "expected_env": {"s1": "abc", "s2": "def", "result": 1}
+        },
+        {
+            "name": "String in if condition",
+            "code": """
+                var s1 := "test";
+                var s2 := "test";
+                var result := 0;
+                if s1 == s2 do
+                    result = 1;
+                end
+                print result;
+            """,
+            "expected_env": {"s1": "test", "s2": "test", "result": 1}
+        },
+
 
         # Test cases that are expected to fail
         # Each has "code" and "expected_error"
@@ -332,6 +402,48 @@ def test():
             # This test expects a failure since our language doesn't allow implicit type conversion
             "code": "var x := 10; var y := 3.0; var z := x / y;", 
             "expected_error": "Type mismatch in binary operation"
+        },
+        # Error test cases
+        {
+            "name": "Unterminated string literal",
+            "code": """
+                var s := "Unterminated string;
+            """,
+            "expected_error": "Unterminated string literal"
+        },
+        {
+            "name": "String concatenation type error",
+            "code": """
+                var s := "Hello";
+                var i := 123;
+                var result := s + i;
+            """,
+            "expected_error": "Cannot concatenate string with non-string type"
+        },
+        {
+            "name": "String comparison error - unsupported operator",
+            "code": """
+                var s1 := "abc";
+                var s2 := "def";
+                if s1 < s2 do print "s1 is less"; end
+            """,
+            "expected_error": "not supported for strings"
+        },
+        {
+            "name": "String compound assignment error",
+            "code": """
+                var s := "Hello";
+                var i := 5;
+                s += i;
+            """,
+            "expected_error": "Cannot use += with string and int"
+        },
+        {
+            "name": "Invalid assignment from int to string",
+            "code": """
+                var s : string = 42;
+            """,
+            "expected_error": "Cannot assign int value to string variable"
         },
     ]
 

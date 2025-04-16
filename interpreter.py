@@ -27,6 +27,11 @@ def add(left, right, left_type, right_type):
     """Addition with C semantics"""
     if is_float_type(left_type) or is_float_type(right_type):
         return float(left) + float(right)
+    
+    # String concatenation
+    if left_type == TYPE_STRING and right_type == TYPE_STRING:
+        return str(left) + str(right)
+        
     return int(left) + int(right)
 
 def subtract(left, right, left_type, right_type):
