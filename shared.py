@@ -62,6 +62,7 @@ TT_TYPE_STRING = 55
 TT_DEF = 56
 TT_RETURN = 57
 TT_COMMA = 58
+TT_NEWLINE = 59
 
 # AST Node types (C-style enums)
 AST_NODE_BASE = 0
@@ -78,7 +79,6 @@ AST_NODE_BREAK = 10
 AST_NODE_CONTINUE = 11
 AST_NODE_EXPR_STMT = 12
 AST_NODE_VAR_DECL = 13
-AST_NODE_EMPTY = 14
 AST_NODE_COMPARE = 15
 AST_NODE_LOGICAL = 16
 AST_NODE_BITOP = 17
@@ -205,10 +205,11 @@ BINARY_PRECEDENCE = {
     TT_MOD: 90,
     TT_SHL: 90,      # Python: shift has same precedence as multiplication
     TT_SHR: 90,
+    TT_LPAREN: 100,  # needed for function calls only
 }
 
 # Unary operator precedence (higher than binary operators)
-UNARY_PRECEDENCE = 100
+UNARY_PRECEDENCE = 110
 
 def var_type_to_string(var_type):
     """Convert a variable type constant to a string for error messages using the map"""
@@ -231,7 +232,6 @@ def ast_node_type_to_string(node_type):
         AST_NODE_CONTINUE: "CONTINUE",
         AST_NODE_EXPR_STMT: "EXPR_STMT",
         AST_NODE_VAR_DECL: "VAR_DECL",
-        AST_NODE_EMPTY: "EMPTY",
         AST_NODE_COMPARE: "COMPARE",
         AST_NODE_LOGICAL: "LOGICAL",
         AST_NODE_BITOP: "BITOP",
@@ -312,6 +312,7 @@ TOKEN_NAMES = {
     TT_DEF: "TT_DEF",
     TT_RETURN: "TT_RETURN",
     TT_COMMA: "TT_COMMA",
+    TT_NEWLINE: "TT_NEWLINE",
 }
 
 def token_name(token_type):
