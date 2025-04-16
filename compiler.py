@@ -1244,8 +1244,12 @@ class Parser:
         self.consume(TT_DO)
         body = []
         while self.token.type != TT_END:
+            if self.token.type == TT_EOF:
+                self.error("Unexpected end of file while parsing a block (missing 'end')")
+            self.skip_separators()  # Skip any separators before checking for END again
+            if self.token.type == TT_END: break
             stmt = self.statement()
-            if stmt: body.append(stmt)
+            body.append(stmt)
         self.advance()
         self.skip_separators()
         return body
@@ -1310,9 +1314,6 @@ class Parser:
             if self.current_function is not None:
                 self.error("Nested function declarations are not allowed")
             return self.function_declaration()
-
-        if self.token.type == TT_END:
-            return None #save to return None because this returns to doblock()
 
         # Handle return statements
         if self.token.type == TT_RETURN:
@@ -1452,7 +1453,11 @@ class Parser:
                 # Check if variable has been declared
                 if not self.is_variable_declared(var):
                     self.error("Variable '%s' is not declared" % var)
-                    
+
+                # Explicitly check for type-inference assignment on already declared variable
+                if self.token.type == TT_TYPE_ASSIGN:
+                    self.error("Cannot use ':=' with already declared variable '%s'. Use '=' instead" % var)
+
                 # Handle all assignment operators (regular and compound)
                 if self.token.type in [TT_ASSIGN, TT_PLUS_ASSIGN, TT_MINUS_ASSIGN, 
                                       TT_MULT_ASSIGN, TT_DIV_ASSIGN, TT_MOD_ASSIGN]:
@@ -1508,8 +1513,9 @@ class Parser:
             return
 
         # Consume semicolon or newline if present
-        while self.token.type == TT_SEMI or self.token.type == TT_NEWLINE:
-            self.advance()
+        if self.token.type == TT_SEMI or self.token.type == TT_NEWLINE:
+            while self.token.type == TT_SEMI or self.token.type == TT_NEWLINE:
+                self.advance()
             return
 
         # Check if we're at the end of a line or file

@@ -392,7 +392,7 @@ def test():
                 def main() do var x:=10; x:=20 // x is already declared, so := must fail
                 end
             """,
-            "expected_error": "Cannot use type inference operator on already declared variable 'x'"
+            "expected_error": "Cannot use ':=' with already declared variable 'x'. Use '=' instead"
         },
         {
             # Tests invalid redeclaration of variable
