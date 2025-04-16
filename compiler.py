@@ -9,6 +9,7 @@ from shared import *
 class ASTNode(object):
     def __init__(self, node_type=AST_NODE_BASE):
         self.node_type = node_type
+        self.expr_type = TYPE_UNKNOWN
 
     def eval(self, env):
         raise CompilerException("Evaluation not implemented for this node")
@@ -318,6 +319,97 @@ class EmptyNode(ASTNode):
     def __repr__(self):
         return "Empty()"
 
+class FunctionDeclNode(ASTNode):
+    def __init__(self, name, params, return_type, body):
+        ASTNode.__init__(self, AST_NODE_FUNCTION_DECL)
+        self.name = name
+        self.params = params  # List of (name, type) tuples
+        self.return_type = return_type
+        self.body = body
+        self.expr_type = return_type
+
+    def eval(self, env):
+        # Store function in the environment
+        env[self.name] = self
+        return 0
+
+    def __repr__(self):
+        params_str = ", ".join(["%s:%s" % (name, var_type_to_string(ptype)) for name, ptype in self.params])
+        return "Function(%s(%s):%s, [%s])" % (
+            self.name, 
+            params_str, 
+            var_type_to_string(self.return_type), 
+            ", ".join(repr(stmt) for stmt in self.body),
+        )
+
+class ReturnNode(ASTNode):
+    def __init__(self, expr=None):
+        ASTNode.__init__(self, AST_NODE_RETURN)
+        self.expr = expr  # Can be None for return with no value
+        self.expr_type = TYPE_VOID if expr is None else (expr.expr_type if hasattr(expr, 'expr_type') else TYPE_UNKNOWN)
+
+    def eval(self, env):
+        value = None if self.expr is None else self.expr.eval(env)
+        # Throw a special exception to unwind the call stack
+        raise ReturnException(value)
+
+    def __repr__(self):
+        if self.expr:
+            return "Return(%s)" % repr(self.expr)
+        else:
+            return "Return()"
+
+class FunctionCallNode(ASTNode):
+    def __init__(self, name, args):
+        ASTNode.__init__(self, AST_NODE_FUNCTION_CALL)
+        self.name = name
+        self.args = args
+        self.expr_type = TYPE_UNKNOWN  # Will be set during type checking
+
+    def eval(self, env):
+        # Get function from environment
+        if self.name not in env:
+            raise CompilerException("Function '%s' is not defined" % self.name)
+        
+        func = env[self.name]
+        if not isinstance(func, FunctionDeclNode):
+            raise CompilerException("'%s' is not a function" % self.name)
+        
+        # Create a new local scope for function execution
+        local_env = Environment(parent=env)
+        
+        # Evaluate arguments and bind to parameters
+        if len(self.args) != len(func.params):
+            raise CompilerException("Function '%s' expects %d arguments, got %d" % 
+                                  (self.name, len(func.params), len(self.args)))
+        
+        for (param_name, param_type), arg in zip(func.params, self.args):
+            arg_value = arg.eval(env)
+            local_env[param_name] = arg_value
+        
+        try:
+            # Execute function body
+            for stmt in func.body:
+                stmt.eval(local_env)
+            
+            # If no return statement was encountered and function is not void,
+            # we should raise an error
+            if func.return_type != TYPE_VOID:
+                raise CompilerException("Function '%s' has non-void return type but reached end of function without return" % self.name)
+            
+            # For void functions, return None
+            return None
+        except ReturnException as ret:
+            # Check return value type against function's return type
+            if func.return_type == TYPE_VOID and ret.value is not None:
+                raise CompilerException("Void function '%s' returned a value" % self.name)
+            
+            return ret.value
+
+    def __repr__(self):
+        args_str = ", ".join(repr(arg) for arg in self.args)
+        return "Call(%s(%s))" % (self.name, args_str)
+
 class CompareNode(ASTNode):
     def __init__(self, operator, left, right):
         ASTNode.__init__(self, AST_NODE_COMPARE)
@@ -436,6 +528,7 @@ class Lexer:
             '&': self.handle_bitand,
             '|': self.handle_bitor,
             ':': self.handle_colon,  # Added for type annotations
+            ',': self.handle_comma,  # Added for function parameters
         }
 
     def make_token(self, token_type, value):
@@ -708,6 +801,12 @@ class Lexer:
             token.value = ':='
             self.advance()
         return token
+    
+    def handle_comma(self):
+        """Handle comma token for function parameters"""
+        token = self.make_token(TT_COMMA, ',')
+        self.advance()
+        return token
 
     def next_token(self):
         while self.current_char:
@@ -737,18 +836,94 @@ class BreakException(Exception):
     """Raised when a break statement is encountered"""
     pass
     
+class ReturnException(Exception):
+    """Raised when a return statement is encountered"""
+    def __init__(self, value=None):
+        self.value = value
+
 class ContinueException(Exception):
     """Raised when a continue statement is encountered"""
     pass
+
+class Environment(dict):
+    def __init__(self, parent=None):
+        dict.__init__(self)
+        self.parent = parent
+    
+    def __getitem__(self, key):
+        if key in self:
+            return dict.__getitem__(self, key)
+        elif self.parent:
+            return self.parent[key]
+        raise KeyError(key)
 
 class Parser:
     def __init__(self, lexer):
         self.lexer = lexer
         self.token = self.lexer.next_token() # Current token
         self.prev_token = None  # Previous token (for better error messages)
-        self.variables = set()  # Track declared variables
-        self.constants = set()  # Track constants (let declarations)
-        self.var_types = {}     # Track variable types
+        
+        # Per-scope tracking structures
+        self.scopes = ["global"]  # Stack of scope names
+        self.variables = {"global": set()}  # Track declared variables per scope
+        self.constants = {"global": set()}  # Track constants (let declarations) per scope
+        self.var_types = {"global": {}}     # Track variable types per scope
+        
+        self.functions = {}     # Track function declarations (name -> (params, return_type))
+        self.current_function = None  # Track current function for return checking
+
+    def enter_scope(self, scope_name):
+        """Enter a new scope for variable tracking"""
+        self.scopes.append(scope_name)
+        self.variables[scope_name] = set()
+        self.constants[scope_name] = set()
+        self.var_types[scope_name] = {}
+    
+    def leave_scope(self):
+        """Leave the current scope"""
+        if len(self.scopes) > 1:  # Don't leave global scope
+            self.scopes.pop()
+    
+    def current_scope(self):
+        """Get the current scope name"""
+        return self.scopes[-1]
+    
+    def is_variable_declared(self, var_name):
+        """Check if a variable is declared in any accessible scope"""
+        # Check all scopes from current to global
+        for scope in reversed(self.scopes):
+            if var_name in self.variables[scope]:
+                return True
+        return False
+    
+    def is_constant(self, var_name):
+        """Check if a variable is a constant in any accessible scope"""
+        # Check all scopes from current to global
+        for scope in reversed(self.scopes):
+            if var_name in self.constants[scope]:
+                return True
+        return False
+    
+    def get_variable_type(self, var_name):
+        """Get a variable's type from the appropriate scope"""
+        # Check all scopes from current to global
+        for scope in reversed(self.scopes):
+            if var_name in self.var_types[scope]:
+                return self.var_types[scope][var_name]
+        return TYPE_UNKNOWN
+    
+    def declare_variable(self, var_name, var_type, is_const=False):
+        """Declare a variable in the current scope"""
+        current = self.current_scope()
+        # Check if already declared in current scope
+        if var_name in self.variables[current]:
+            return False  # Already declared in this scope
+            
+        self.variables[current].add(var_name)
+        self.var_types[current][var_name] = var_type
+        if is_const:
+            self.constants[current].add(var_name)
+        return True
         
     def error(self, message):
         token_type_name = token_name(self.token.type)
@@ -791,13 +966,101 @@ class Parser:
 
     def check_type_compatibility(self, var_name, expr_type):
         """Check if the expression's type is compatible with the variable's type"""
-        # Get variable type
-        var_type = self.var_types.get(var_name)
+        # Get variable type from the appropriate scope
+        var_type = self.get_variable_type(var_name)
 
         # Check compatibility using can_promote function
         if var_type is not None and var_type != TYPE_UNKNOWN and expr_type != TYPE_UNKNOWN and not can_promote(expr_type, var_type):
             self.error("Type mismatch: can't assign a value of type %s to %s (type %s)" % 
                        (var_type_to_string(expr_type), var_name, var_type_to_string(var_type)))
+
+    def function_declaration(self):
+        """Parse a function declaration"""
+        self.advance()  # Skip 'def'
+        
+        # Parse function name
+        if self.token.type != TT_IDENT:
+            self.error("Expected function name after 'def'")
+        name = self.token.value
+        self.advance()
+        
+        # Parse parameters
+        self.consume(TT_LPAREN)
+        params = []
+        if self.token.type != TT_RPAREN:
+            params.append(self.parameter())
+            while self.token.type == TT_COMMA:
+                self.advance()  # Skip comma
+                params.append(self.parameter())
+        self.consume(TT_RPAREN)
+        
+        # Parse return type (if specified)
+        return_type = TYPE_VOID  # Default to void (implicitly)
+        if self.token.type == TT_COLON:
+            self.advance()
+            if self.token.type in TYPE_TOKEN_MAP:
+                return_type = TYPE_TOKEN_MAP[self.token.type]
+                self.advance()
+            else:
+                self.error("Expected type name after ':'")
+        
+        # Register function
+        if name in self.functions:
+            self.error("Function '%s' is already defined" % name)
+        self.functions[name] = (params, return_type)
+        
+        # Parse function body
+        self.consume(TT_DO)
+        
+        # Enter function scope
+        self.enter_scope(name)
+        
+        # Add parameters to function scope variables
+        for param_name, param_type in params:
+            # Check for duplicate parameter names
+            if param_name in self.variables[name]:
+                self.error("Duplicate parameter name '%s'" % param_name)
+            
+            # Add parameter to function scope
+            self.variables[name].add(param_name)
+            self.var_types[name][param_name] = param_type
+        
+        # Save and set current function for return checking
+        prev_function = self.current_function
+        self.current_function = name
+        
+        # Parse function body statements
+        body = []
+        while self.token.type not in [TT_END, TT_EOF]:
+            body.append(self.statement())
+        self.consume(TT_END)
+        
+        # Restore previous context
+        self.current_function = prev_function
+        self.leave_scope()
+        
+        return FunctionDeclNode(name, params, return_type, body)
+
+    def parameter(self):
+        """Parse a function parameter (name:type)"""
+        if self.token.type != TT_IDENT:
+            self.error("Expected parameter name")
+            
+        name = self.token.value
+        self.advance()
+        
+        # Parse type - REQUIRED
+        if self.token.type != TT_COLON:
+            self.error("Function parameters require explicit type annotation")
+        
+        self.advance() # Skip colon
+        if self.token.type not in TYPE_TOKEN_MAP:
+            self.error("Expected type name after ':'")
+        
+        param_type = TYPE_TOKEN_MAP[self.token.type]
+        self.advance()
+        
+        return (name, param_type)
 
     def determine_result_type(self, left_type, right_type):
         """Determine the result type of a binary operation based on operand types"""
@@ -817,12 +1080,12 @@ class Parser:
             var_name = t.value
             
             # For a variable in an expression context:
-            # Check if variable has been declared
-            if var_name not in self.variables:
+            # Check if variable has been declared in any accessible scope
+            if not self.is_variable_declared(var_name):
                 self.error("Variable '%s' is not declared" % var_name)
                 
-            # Get the variable type
-            var_type = self.var_types.get(var_name, TYPE_UNKNOWN)
+            # Get the variable type from the appropriate scope
+            var_type = self.get_variable_type(var_name)
             return VariableNode(var_name, var_type)
             
         if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
@@ -841,10 +1104,10 @@ class Parser:
         if t.type == TT_ASSIGN and left.node_type == AST_NODE_VARIABLE:
             # Get variable name from left side
             var_name = left.name
-            var_type = self.var_types.get(var_name, TYPE_UNKNOWN)
+            var_type = self.get_variable_type(var_name)
             
             # Check if variable is a constant (declared with 'let')
-            if var_name in self.constants:
+            if self.is_constant(var_name):
                 self.error("Cannot reassign to constant '%s'" % var_name)
                 
             # Parse the right side expression
@@ -854,7 +1117,7 @@ class Parser:
             # use the fully resolved types
             if right.node_type == AST_NODE_VARIABLE:
                 right_var = right.name
-                right_type = self.var_types.get(right_var, right.expr_type)
+                right_type = self.get_variable_type(right_var)
             
             # Check type compatibility
             self.check_type_compatibility(var_name, right.expr_type)
@@ -922,6 +1185,37 @@ class Parser:
         if self.token.type == TT_SEMI:
             self.advance()  # Skip the semicolon
             return EmptyNode()
+            
+        # Handle function declarations
+        if self.token.type == TT_DEF:
+            # Only allowed in global scope
+            if self.current_function is not None:
+                self.error("Nested function declarations are not allowed")
+            return self.function_declaration()
+            
+        # Handle return statements
+        if self.token.type == TT_RETURN:
+            # Must be inside a function
+            if self.current_function is None:
+                self.error("'return' statement outside function")
+            
+            self.advance()
+            
+            # Return with no value
+            if self.token.type in [TT_SEMI, TT_EOF] or (self.prev_token and self.token.line > self.prev_token.line):
+                self.check_statement_end()
+                return ReturnNode(None)
+                
+            # Return with value
+            expr = self.expression(0)
+            
+            # Check if return type matches function return type
+            func_return_type = self.functions[self.current_function][1]
+            if func_return_type == TYPE_VOID:
+                self.error("Void function '%s' cannot return a value" % self.current_function)
+                
+            self.check_statement_end()
+            return ReturnNode(expr)
         
         # Handle variable declarations (var and let)
         if self.token.type in [TT_VAR, TT_LET]:
@@ -952,7 +1246,7 @@ class Parser:
                 elif expr.node_type == AST_NODE_VARIABLE:
                     # Get type from referenced variable
                     ref_var = expr.name
-                    var_type = self.var_types.get(ref_var, TYPE_UNKNOWN)
+                    var_type = self.get_variable_type(ref_var)
                     if var_type == TYPE_UNKNOWN:
                         self.error("Cannot infer type from variable '%s' with unknown type" % ref_var)
                 elif hasattr(expr, 'expr_type'):
@@ -979,18 +1273,15 @@ class Parser:
             else:
                 self.error("Variable declaration must include an initialization")
             
-            # Register the variable as defined
-            if var_name in self.variables:
-                self.error("Variable '%s' is already declared" % var_name)
+            # Register the variable as defined in the current scope
+            if var_name in self.variables[self.current_scope()]:
+                self.error("Variable '%s' is already declared in this scope" % var_name)
                 
-            self.variables.add(var_name)
-            self.var_types[var_name] = var_type
+            # Declare the variable in current scope
+            self.declare_variable(var_name, var_type, decl_type == TT_LET)
             
-            # If this is a constant declaration (let), add it to constants set
-            if decl_type == TT_LET:
-                self.constants.add(var_name)
-                
             self.check_statement_end()
+            
             return VarDeclNode(decl_type, var_name, var_type, expr)
             
         if self.token.type == TT_IF:
@@ -1030,6 +1321,8 @@ class Parser:
                 self.error("Expected 'end' before 'else'")
                 
             return IfNode(condition, then_body, None)  # Should never reach here
+            
+        # Handle while loop
         elif self.token.type == TT_WHILE:
             self.advance()
             condition = self.expression(0)
@@ -1055,43 +1348,78 @@ class Parser:
         elif self.token.type == TT_IDENT:
             var = self.token.value
             self.advance()
-            
-            # Check if variable has been declared
-            if var not in self.variables:
-                self.error("Variable '%s' is not declared" % var)
+
+            # Function call
+            if self.token.type == TT_LPAREN:
+                # Check if function exists
+                if var not in self.functions:
+                    self.error("Function '%s' is not declared" % var)
                 
-            # Handle all assignment operators (regular and compound)
-            if self.token.type in [TT_ASSIGN, TT_PLUS_ASSIGN, TT_MINUS_ASSIGN, 
-                                  TT_MULT_ASSIGN, TT_DIV_ASSIGN, TT_MOD_ASSIGN]:
-                # Check if variable is a constant (declared with 'let')
-                if var in self.constants:
-                    self.error("Cannot reassign to constant '%s'" % var)
+                self.advance()  # Skip '('
+                args = []
+                if self.token.type != TT_RPAREN:
+                    args.append(self.expression(0))
+                    while self.token.type == TT_COMMA:
+                        self.advance()  # Skip comma
+                        args.append(self.expression(0))
+                self.consume(TT_RPAREN)
                 
-                op = self.token.type
-                var_type = self.var_types.get(var, TYPE_UNKNOWN)
+                # Check argument types match parameter types
+                func_params, func_return_type = self.functions[var]
                 
-                # Advance past the operator
-                self.advance()
+                # Check number of arguments
+                if len(args) != len(func_params):
+                    self.error("Function '%s' expects %d arguments, got %d" % 
+                              (var, len(func_params), len(args)))
                 
-                # Parse the expression
-                expr = self.expression(0)
+                # Check argument types
+                for i, ((param_name, param_type), arg) in enumerate(zip(func_params, args)):
+                    if arg.expr_type != param_type and not can_promote(arg.expr_type, param_type):
+                        self.error("Type mismatch for argument %d of function '%s': expected %s, got %s" %
+                                  (i+1, var, var_type_to_string(param_type), var_type_to_string(arg.expr_type)))
                 
-                # Check type compatibility for all assignments
-                self.check_type_compatibility(var, expr.expr_type)
-                
-                # For compound operators, use CompoundAssignNode
-                if op != TT_ASSIGN:
-                    self.check_statement_end()
-                    return CompoundAssignNode(op, var, expr, var_type)
-                    
-                # Regular assignment
                 self.check_statement_end()
-                return AssignNode(var, expr, var_type)
-            # Handle expression statements (e.g., an identifier by itself)
-            var_type = self.var_types.get(var, TYPE_UNKNOWN)
-            expr = VariableNode(var, var_type)
-            self.check_statement_end()
-            return ExprStmtNode(expr)
+                return FunctionCallNode(var, args)
+            
+            # Variable reference
+            else:
+                # Check if variable has been declared
+                if not self.is_variable_declared(var):
+                    self.error("Variable '%s' is not declared" % var)
+                    
+                # Handle all assignment operators (regular and compound)
+                if self.token.type in [TT_ASSIGN, TT_PLUS_ASSIGN, TT_MINUS_ASSIGN, 
+                                      TT_MULT_ASSIGN, TT_DIV_ASSIGN, TT_MOD_ASSIGN]:
+                    # Check if variable is a constant (declared with 'let')
+                    if self.is_constant(var):
+                        self.error("Cannot reassign to constant '%s'" % var)
+                
+                    op = self.token.type
+                    var_type = self.get_variable_type(var)
+                
+                    # Advance past the operator
+                    self.advance()
+                
+                    # Parse the expression
+                    expr = self.expression(0)
+                
+                    # Check type compatibility for assignments
+                    self.check_type_compatibility(var, expr.expr_type)
+                
+                    # For compound operators, use CompoundAssignNode
+                    if op != TT_ASSIGN:
+                        self.check_statement_end()
+                        return CompoundAssignNode(op, var, expr, var_type)
+                    
+                    # Regular assignment
+                    self.check_statement_end()
+                    return AssignNode(var, expr, var_type)
+                
+                # Handle expression statements (e.g., an identifier by itself)
+                var_type = self.get_variable_type(var)
+                expr = VariableNode(var, var_type)
+                self.check_statement_end()
+                return ExprStmtNode(expr)
         elif self.token.type in [TT_INT_LITERAL, TT_UINT_LITERAL, TT_LONG_LITERAL, TT_ULONG_LITERAL, 
                                 TT_FLOAT_LITERAL, TT_STRING_LITERAL, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
             # Also handle expressions that start with other tokens
@@ -1125,13 +1453,51 @@ class Parser:
 
 def run(text):
     lexer = Lexer(text)
-    parser = Parser(lexer)
+    parser = Parser(lexer) 
     try:
+        # Parse the program
         program = parser.parse()
-        env = {}
         ast = program
+        
+        # Create environment for execution
+        env = Environment()
+        
+        # Check if there are any non-function declarations in global scope
+        has_global_code = False
         for node in program:
-            node.eval(env)
-        return {'success': True, 'env': env, 'ast': ast}
+            if node.node_type != AST_NODE_FUNCTION_DECL:
+                has_global_code = True
+                break
+        
+        if has_global_code:
+            return {'success': False, 'error': 'Code outside of functions is not allowed', 'ast': ast}
+        
+        # First process all function declarations
+        for node in program:
+            if node.node_type == AST_NODE_FUNCTION_DECL:
+                node.eval(env)
+        
+        # Check if main function exists
+        if "main" not in env:
+            return {'success': False, 'error': "No 'main' function defined", 'ast': ast}
+        
+        # Execute main function
+        main_func = env["main"]
+        if not isinstance(main_func, FunctionDeclNode):
+            return {'success': False, 'error': "'main' is not a function", 'ast': ast}
+        
+        # Make sure main has no parameters
+        if len(main_func.params) > 0:
+            return {'success': False, 'error': "Function 'main' cannot have parameters", 'ast': ast}
+        
+        try:
+            # Create a scope for main function
+            local_env = Environment(parent=env)
+            for stmt in main_func.body:
+                stmt.eval(local_env)
+                
+            return {'success': True, 'env': env, 'ast': ast}
+        except ReturnException as ret:
+            return {'success': True, 'result': ret.value, 'env': env, 'ast': ast}
     except CompilerException as e:
         return {'success': False, 'error': str(e), 'ast': None}

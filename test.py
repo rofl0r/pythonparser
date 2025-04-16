@@ -8,117 +8,117 @@ def test():
         # Each has "code" and "expected_env"
         {
             # Tests variable declaration with type inference (:=)
-            "code": "var x := 5;",
+            "code": "def main() do var x := 5; end",
             "expected_env": {"x": 5}
         },
         {
             # Tests float literal with type inference
-            "code": "var y := 3.14;",
+            "code": "def main() do var y := 3.14; end",
             "expected_env": {"y": 3.14}
         },
         {
             # Tests explicit int type annotation
-            "code": "var x: int = 10;",
+            "code": "def main() do var x: int = 10; end",
             "expected_env": {"x": 10}
         },
         {
             # Tests explicit float type annotation
-            "code": "var y: float = 2.718;",
+            "code": "def main() do var y: float = 2.718; end",
             "expected_env": {"y": 2.718}
         },
         {
             # Tests let with type inference
-            "code": "let x := 42;",
+            "code": "def main() do let x := 42; end",
             "expected_env": {"x": 42}
         },
         {
             # Tests assignment of same type variable
-            "code": "var x := 5; var y := x;",
+            "code": "def main() do var x := 5; var y := x; end",
             "expected_env": {"x": 5, "y": 5}
         },
         {
             # Tests assignment expression in while condition (not a comparison)
-            "code": "var x := 0; var y := 0; while x = y do y = y + 1; end;",
+            "code": "def main() do var x := 0; var y := 0; while x = y do y = y + 1; end; end",
             "expected_env": {"x": 0, "y": 0}
         },
         {
             # Tests operator precedence in expressions (* has higher precedence than +)
-            "code": "var x := 5 + 3 * 2;",
+            "code": "def main() do var x := 5 + 3 * 2; end",
             "expected_env": {"x": 11}
         },
         {
             # Tests basic if statement with equality comparison
-            "code": "var x := 1; if x == 1 do print x; end", 
+            "code": "def main() do var x := 1; if x == 1 do print x; end end", 
             "expected_env": {"x": 1}
         },
         {
             # Tests if-else statement (true condition branch taken)
-            "code": "var x := 1; var result := 0; if x == 1 do result = x; end else do result = 0; end",
+            "code": "def main() do var x := 1; var result := 0; if x == 1 do result = x; end else do result = 0; end end",
             "expected_env": {"x": 1, "result": 1}
         },
         {
             # Tests bitwise OR operator (|)
-            "code": "var x := 5 | 3;", 
+            "code": "def main() do var x := 5 | 3; end", 
             "expected_env": {"x": 7}
         },
         {
             # Tests bitwise AND operator (&)
-            "code": "var x := 5 & 3;", 
+            "code": "def main() do var x := 5 & 3; end", 
             "expected_env": {"x": 1}
         },
         {
             # Tests combination of bitwise operations with variable references
-            "code": "var x := 5 | 3; var y := x & 2;",
+            "code": "def main() do var x := 5 | 3; var y := x & 2; end",
             "expected_env": {"x": 7, "y": 2}
         },
         {
             # Tests logical AND in if condition (evaluates to false)
-            "code": "var x := 1; var y := 0; var result := 0; if x and y do result = x; end", 
+            "code": "def main() do var x := 1; var y := 0; var result := 0; if x and y do result = x; end end", 
             "expected_env": {"x": 1, "y": 0, "result": 0}
         },
         {
             # Tests XOR operator with keywords
-            "code": "var x := 5 xor 3;",
+            "code": "def main() do var x := 5 xor 3; end",
             "expected_env": {"x": 6}  # 5 xor 3 = 6
         },
         {
             # Tests XOR operator with variable references
-            "code": "var x := 7; var y := x xor 2;",
+            "code": "def main() do var x := 7; var y := x xor 2; end",
             "expected_env": {"x": 7, "y": 5}  # 7 xor 2 = 5
         },
         {
             # Tests bitwise NOT unary operator
-            "code": "var x := 15; var y := bitnot 3;", 
+            "code": "def main() do var x := 15; var y := bitnot 3; end", 
             "expected_env": {"x": 15, "y": -4}
         },
         {
             # Tests else-if construct (first false, second true)
-            "code": "var x := 1; var result := 0; if x == 0 do result = 0; end else if x == 1 do result = 1; end",
+            "code": "def main() do var x := 1; var result := 0; if x == 0 do result = 0; end else if x == 1 do result = 1; end end",
             "expected_env": {"x": 1, "result": 1}
         },
         {
             # Tests multiple else-if branches (first & second false, third true)
-            "code": "var x := 3; if x == 1 do print 1; end else if x == 2 do print 2; end else if x == 3 do print 3; end",
+            "code": "def main() do var x := 3; if x == 1 do print 1; end else if x == 2 do print 2; end else if x == 3 do print 3; end end",
             "expected_env": {"x": 3}
         },
         {
             # Tests mixed int and float operations
-            "code": "var x: int = 5; var y: float = 2.5; var z := y;", 
+            "code": "def main() do var x: int = 5; var y: float = 2.5; var z := y; end", 
             "expected_env": {"x": 5, "y": 2.5, "z": 2.5}  # Variable declaration with inferred type from another variable
         },
         {
             # Tests int division
-            "code": "var x := 10; var y := 3; var z := x / y;",
+            "code": "def main() do var x := 10; var y := 3; var z := x / y; end",
             "expected_env": {"x": 10, "y": 3, "z": 3}  # Integer division
         },
         {
             # Tests float division
-            "code": "var x := 10.0; var y := 3.0; var z := x / y;",
+            "code": "def main() do var x := 10.0; var y := 3.0; var z := x / y; end",
             "expected_env": {"x": 10.0, "y": 3.0, "z": 3.3333333333333335}  # Float division
         },
         {
             # Tests assignment as expression in while condition
-            "code": "var x := 10; var y := 0; while (y = y + 1) < 5 do x -= 1; end",
+            "code": "def main() do var x := 10; var y := 0; while (y = y + 1) < 5 do x -= 1; end end",
             # y will end up as 5 (the condition becomes false when y = 5)
             # x will be decremented 4 times (while y is 1,2,3,4)
             "expected_env": {"x": 6, "y": 5}
@@ -126,66 +126,74 @@ def test():
         {
            "name": "uint variable declaration and operations",
            "code": """
-               var x : uint = 42;
-               var y := 10u;
-               var z : uint = x + y;
-               print z;
-               z = z / 2;
-               print z;
-               z = z * 3;
-               print z;
+               def main() do
+                   var x : uint = 42;
+                   var y := 10u;
+                   var z : uint = x + y;
+                   print z;
+                   z = z / 2;
+                   print z;
+                   z = z * 3;
+                   print z;
+               end
            """,
            "expected_env": {"x": 42, "y": 10, "z": 78}
         },
         {
            "name": "long variable declaration and operations",
            "code": """
-               var x : long = 42l;
-               var y := 10l;
-               var z : long = x + y;
-               print z;
-               z = z / 2;
-               print z;
-               z = z * 3;
-               print z;
+               def main() do
+                   var x : long = 42l;
+                   var y := 10l;
+                   var z : long = x + y;
+                   print z;
+                   z = z / 2;
+                   print z;
+                   z = z * 3;
+                   print z;
+               end
            """,
            "expected_env": {"x": 42, "y": 10, "z": 78}
         },
         {
            "name": "ulong variable declaration and operations",
            "code": """
-               var x : ulong = 42ul;
-               var y := 10ul;
-               var z : ulong = x + y;
-               print z;
-               z = z / 2;
-               print z;
-               z = z * 3;
-               print z;
+               def main() do
+                   var x : ulong = 42ul;
+                   var y := 10ul;
+                   var z : ulong = x + y;
+                   print z;
+                   z = z / 2;
+                   print z;
+                   z = z * 3;
+                   print z;
+               end
            """,
            "expected_env": {"x": 42, "y": 10, "z": 78}
         },
         {
            "name": "mixed types variable declaration - type inference",
            "code": """
-               var a := 42;     // int
-               var b := 42u;    // uint
-               var c := 42l;    // long
-               var d := 42ul;   // ulong
-               var e := 42.0;   // float
-               
-               // Test assignments to explicitly typed variables
-               var x : int = 10;
-               var y : uint = 20u;
-               var z : long = 30l;
-               var w : ulong = 40ul;
-               var v : float = 50.0;
-               
-               print a;
-               print b;
-               print c;
-               print d;
-               print e;
+               def main() do
+                   var a := 42;     // int
+                   var b := 42u;    // uint
+                   var c := 42l;    // long
+                   var d := 42ul;   // ulong
+                   var e := 42.0;   // float
+                   
+                   // Test assignments to explicitly typed variables
+                   var x : int = 10;
+                   var y : uint = 20u;
+                   var z : long = 30l;
+                   var w : ulong = 40ul;
+                   var v : float = 50.0;
+                   
+                   print a;
+                   print b;
+                   print c;
+                   print d;
+                   print e;
+               end
            """,
            "expected_env": {"a": 42, "b": 42, "c": 42, "d": 42, "e": 42.0,
                         "x": 10, "y": 20, "z": 30, "w": 40, "v": 50.0}
@@ -193,30 +201,34 @@ def test():
         {
            "name": "unsigned int division",
            "code": """
-               var x : uint = 10u;
-               var y : uint = 3u;
-               var z : uint = x / y;  // Should be 3 (truncated)
-               print z;
+               def main() do
+                   var x : uint = 10u;
+                   var y : uint = 3u;
+                   var z : uint = x / y;  // Should be 3 (truncated)
+                   print z;
+               end
            """,
            "expected_env": {"x": 10, "y": 3, "z": 3}
         },
         {
            "name": "signed division with negative numbers",
            "code": """
-               var x : int = -10;
-               var y : int = 3;
-               var z : int = x / y;  // Should be -3 (truncated toward zero)
-               print z;
-               
-               var a : int = 10;
-               var b : int = -3;
-               var c : int = a / b;  // Should be -3
-               print c;
-               
-               var m : int = -10;
-               var n : int = -3;
-               var o : int = m / n;  // Should be 3
-               print o;
+               def main() do
+                   var x : int = -10;
+                   var y : int = 3;
+                   var z : int = x / y;  // Should be -3 (truncated toward zero)
+                   print z;
+                   
+                   var a : int = 10;
+                   var b : int = -3;
+                   var c : int = a / b;  // Should be -3
+                   print c;
+                   
+                   var m : int = -10;
+                   var n : int = -3;
+                   var o : int = m / n;  // Should be 3
+                   print o;
+               end
            """,
            "expected_env": {"x": -10, "y": 3, "z": -3, 
                         "a": 10, "b": -3, "c": -3, 
@@ -225,20 +237,22 @@ def test():
         {
            "name": "assignment in expression-condition",
            "code": """
-               var a : uint = 0u;
-               
-               if a = 5u do
-                   print a;
-               end
-               
-               var b : long = 0l;
-               if b = 10l do
-                   print b;
-               end
-               
-               var c : ulong = 0ul;
-               if c = 15ul do
-                   print c;
+               def main() do
+                   var a : uint = 0u;
+                   
+                   if a = 5u do
+                       print a;
+                   end
+                   
+                   var b : long = 0l;
+                   if b = 10l do
+                       print b;
+                   end
+                   
+                   var c : ulong = 0ul;
+                   if c = 15ul do
+                       print c;
+                   end
                end
            """,
            "expected_env": {"a": 5, "b": 10, "c": 15}
@@ -247,68 +261,82 @@ def test():
         {
             "name": "Basic string declaration",
             "code": """
-                var s := "Hello, world!";
-                print s;
+                def main() do
+                    var s := "Hello, world!";
+                    print s;
+                end
             """,
             "expected_env": {"s": "Hello, world!"}
         },
         {
             "name": "String with explicit type annotation",
             "code": """
-                var s : string = "Hello";
-                print s;
+                def main() do
+                    var s : string = "Hello";
+                    print s;
+                end
             """,
             "expected_env": {"s": "Hello"}
         },
         {
             "name": "String concatenation",
             "code": """
-                var s1 := "Hello, ";
-                var s2 := "world!";
-                var s3 := s1 + s2;
-                print s3;
+                def main() do
+                    var s1 := "Hello, ";
+                    var s2 := "world!";
+                    var s3 := s1 + s2;
+                    print s3;
+                end
             """,
             "expected_env": {"s1": "Hello, ", "s2": "world!", "s3": "Hello, world!"}
         },
         {
             "name": "String compound assignment",
             "code": """
-                var s := "Hello";
-                s += ", world!";
-                print s;
+                def main() do
+                    var s := "Hello";
+                    s += ", world!";
+                    print s;
+                end
             """,
             "expected_env": {"s": "Hello, world!"}
         },
         {
             "name": "String comparison equality",
             "code": """
-                var s1 := "abc";
-                var s2 := "abc";
-                var result := s1 == s2;
-                print result;
+                def main() do
+                    var s1 := "abc";
+                    var s2 := "abc";
+                    var result := s1 == s2;
+                    print result;
+                end
             """,
             "expected_env": {"s1": "abc", "s2": "abc", "result": 1}
         },
         {
             "name": "String comparison inequality",
             "code": """
-                var s1 := "abc";
-                var s2 := "def";
-                var result := s1 != s2;
-                print result;
+                def main() do
+                    var s1 := "abc";
+                    var s2 := "def";
+                    var result := s1 != s2;
+                    print result;
+                end
             """,
             "expected_env": {"s1": "abc", "s2": "def", "result": 1}
         },
         {
             "name": "String in if condition",
             "code": """
-                var s1 := "test";
-                var s2 := "test";
-                var result := 0;
-                if s1 == s2 do
-                    result = 1;
+                def main() do
+                    var s1 := "test";
+                    var s2 := "test";
+                    var result := 0;
+                    if s1 == s2 do
+                        result = 1;
+                    end
+                    print result;
                 end
-                print result;
             """,
             "expected_env": {"s1": "test", "s2": "test", "result": 1}
         },
@@ -319,131 +347,177 @@ def test():
 
         {
             # Tests error when trying to assign float to int
-            "code": "var x := 1; var y := 0.1; x = y;",
+            "code": "def main() do var x := 1; var y := 0.1; x = y; end",
             "expected_error": "Type mismatch: can't assign a value of type float to x (type int)"
         },
         {
             # Tests error when using variable without declaration
-            "code": "x = 5;",  # Missing var or let declaration
+            "code": "def main() do x = 5; end",  # Missing var or let declaration
             "expected_error": "Variable 'x' is not declared"
         },
         {
             # Tests error when declaring variable without initialization
-            "code": "var x; x = 5;",  # Missing initialization
+            "code": "def main() do var x; x = 5; end",  # Missing initialization
             "expected_error": "Variable declaration must include an initialization"
         },
         {
             # Tests error when using undeclared variable in a logical expression
-            "code": "var x := 1; if !x or x and y do print x; end",
+            "code": "def main() do var x := 1; if !x or x and y do print x; end end",
             "expected_error": "Variable 'y' is not declared"
         },
         {
             # Tests error when using undeclared variable in print statement
-            "code": "print z;",
+            "code": "def main() do print z; end",
             "expected_error": "Variable 'z' is not declared"
         },
         {
             # Tests error when using undeclared variable in if condition
-            "code": "if x do print 1; end",
+            "code": "def main() do if x do print 1; end end",
             "expected_error": "Variable 'x' is not declared" 
         },
         {
             # Tests error when missing semicolon between statements on the same line
-            "code": "var x := 5 + 3 print x;",
+            "code": "def main() do var x := 5 + 3 print x; end",
             "expected_error": "Expected semicolon between statements"
         },
         {
             # Tests error when missing semicolon between statements on the same line
-            "code": "var a := 1 var b := 2",
+            "code": "def main() do var a := 1 var b := 2 end",
             "expected_error": "Expected semicolon between statements"
         },
         {
             # Tests error when reassigning to a let-declared constant
-            "code": "let x := 5; x = 10;",
+            "code": "def main() do let x := 5; x = 10; end",
             "expected_error": "Cannot reassign to constant 'x'"
         },
         {
             # Tests error when using compound assignment on a let-declared constant
-            "code": "let x := 5; x += 10;",
+            "code": "def main() do let x := 5; x += 10; end",
             "expected_error": "Cannot reassign to constant 'x'"
         },
         {
             # Tests error when using undeclared variable in initialization
-            "code": "var x := y;",
+            "code": "def main() do var x := y; end",
             "expected_error": "Variable 'y' is not declared"
         },
         {
             # Tests error when using = without explicit type
-            "code": "var x = 5;",
+            "code": "def main() do var x = 5; end",
             "expected_error": "requires explicit type annotation"
         },
         {
             # Tests error when assigning float to int variable
-            "code": "var x: int = 5; var y: float = 2.5; x = y;",
+            "code": "def main() do var x: int = 5; var y: float = 2.5; x = y; end",
             "expected_error": "Type mismatch"
         },
         {
             # Tests error when redeclaring a variable
-            "code": "var x := 5; var x := 10;",
+            "code": "def main() do var x := 5; var x := 10; end",
             "expected_error": "already declared"
         },
         {
             # Tests float literal without decimal digits
-            "code": "var x := 5.;",
+            "code": "def main() do var x := 5.; end",
             "expected_error": "Invalid float literal"
         },
         {
             # Tests else-if without proper end before else
-            "code": "var x := 3; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; end",
+            "code": "def main() do var x := 3; if x == 1 do print 1; else if x == 2 do print 2; else if x == 3 do print 3; end end",
             "expected_error": "Expected 'end' before 'else'"
         },
         {
             # Tests error when mixing int and float types in binary operation
             # This test expects a failure since our language doesn't allow implicit type conversion
-            "code": "var x := 10; var y := 3.0; var z := x / y;", 
+            "code": "def main() do var x := 10; var y := 3.0; var z := x / y; end", 
             "expected_error": "Type mismatch in binary operation"
         },
         # Error test cases
         {
             "name": "Unterminated string literal",
             "code": """
-                var s := "Unterminated string;
+                def main() do
+                    var s := "Unterminated string;
+                end
             """,
             "expected_error": "Unterminated string literal"
         },
         {
             "name": "String concatenation type error",
             "code": """
-                var s := "Hello";
-                var i := 123;
-                var result := s + i;
+                def main() do
+                    var s := "Hello";
+                    var i := 123;
+                    var result := s + i;
+                end
             """,
             "expected_error": "Type mismatch in binary operation: string and int"
         },
         {
             "name": "String comparison error - unsupported operator",
             "code": """
-                var s1 := "abc";
-                var s2 := "def";
-                if s1 < s2 do print "s1 is less"; end
+                def main() do
+                    var s1 := "abc";
+                    var s2 := "def";
+                    if s1 < s2 do print "s1 is less"; end
+                end
             """,
             "expected_error": "Operator < not supported for strings"
         },
         {
             "name": "String compound assignment error",
             "code": """
-                var s := "Hello";
-                var i := 5;
-                s += i;
+                def main() do
+                    var s := "Hello";
+                    var i := 5;
+                    s += i;
+                end
             """,
-            "expected_error": "Type mismatch: can't assign a value of type int to s (type string)"
+            "expected_error": "Cannot concatenate string with non-string type"
         },
         {
             "name": "Invalid assignment from int to string",
             "code": """
-                var s : string = 42;
+                def main() do
+                    var s : string = 42;
+                end
             """,
             "expected_error": "Type mismatch in initialization: can't assign int to s (type string)"
+        },
+        {
+            "name": "Code outside functions not allowed",
+            "code": "var x := 5;",
+            "expected_error": "Code outside of functions is not allowed"
+        },
+        {
+            # Tests functions and return statements
+            "code": """
+                def add(a:int, b:int):int do
+                    return a + b;
+                end
+                
+                def main() do
+                    var x := 10;
+                    var y := 20;
+                    var result := add(x, y);
+                    print result;
+                end
+            """,
+            "expected_env": {"x": 10, "y": 20, "result": 30}
+        },
+        {
+            # Tests function with return value specification
+            "code": """
+                def square(n:int):int do
+                    return n * n;
+                end
+                
+                def main() do
+                    var x := 5;
+                    var y := square(x);
+                    print y;
+                end
+            """,
+            "expected_env": {"x": 5, "y": 25}
         },
     ]
 
@@ -473,10 +547,24 @@ def test():
         else:
             # This is a test that should succeed
             if result['success']:
+                # For function tests, we need to get the local environment
+                env = None
+                if 'result' in result:
+                    # This is likely from a function return
+                    print("Function returned: %s" % result['result'])
+                
+                # Get local environment from main function
+                if 'env' in result:
+                    for key in result['env']:
+                        main_func = result['env'].get(key)
+                        if isinstance(main_func, FunctionDeclNode) and main_func.name == 'main':
+                            env = result['env']
+                            break
+                
                 # Check if environment values match
                 env_match = True
                 for k, v in test_case["expected_env"].iteritems():
-                    if k not in result['env'] or result['env'][k] != v:
+                    if k not in env or env[k] != v:
                         env_match = False
                         break
                 
@@ -485,7 +573,7 @@ def test():
                 else:
                     print("Test passed but with incorrect environment values:")
                     print("  Expected env: %s" % test_case["expected_env"])
-                    print("  Actual env: %s" % result['env'])
+                    print("  Actual env: %s" % env)
                     failed_tests.append(test_num)
             else:
                 print("Failed! Error: %s" % result['error'])

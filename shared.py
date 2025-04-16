@@ -59,6 +59,9 @@ TT_LONG_LITERAL = 52
 TT_ULONG_LITERAL = 53
 TT_STRING_LITERAL = 54
 TT_TYPE_STRING = 55
+TT_DEF = 56
+TT_RETURN = 57
+TT_COMMA = 58
 
 # AST Node types (C-style enums)
 AST_NODE_BASE = 0
@@ -80,6 +83,10 @@ AST_NODE_COMPARE = 15
 AST_NODE_LOGICAL = 16
 AST_NODE_BITOP = 17
 AST_NODE_STRING = 18
+AST_NODE_FUNCTION_DECL = 19
+AST_NODE_FUNCTION_CALL = 20
+AST_NODE_RETURN = 21
+AST_NODE_PARAM = 22
 
 # Variable types
 TYPE_UNKNOWN = 0
@@ -89,6 +96,7 @@ TYPE_UINT = 3
 TYPE_LONG = 4
 TYPE_ULONG = 5
 TYPE_STRING = 6
+TYPE_VOID = 7
 
 # Order of type precedence (highest to lowest)
 TYPE_PRECEDENCE = [TYPE_STRING, TYPE_FLOAT, TYPE_ULONG, TYPE_LONG, TYPE_UINT, TYPE_INT]
@@ -124,7 +132,8 @@ TYPE_TO_STRING_MAP = {
     TYPE_UINT: "uint",
     TYPE_LONG: "long",
     TYPE_ULONG: "ulong",
-    TYPE_STRING: "string"
+    TYPE_STRING: "string",
+    TYPE_VOID: "void"
 }
 
 # Mapping from token types to variable types
@@ -171,6 +180,8 @@ KEYWORDS = {
     'long': TT_TYPE_LONG,  # Long type
     'ulong': TT_TYPE_ULONG,  # Unsigned Long type
     'string': TT_TYPE_STRING,  # String type
+    'def': TT_DEF,          # Function definition
+    'return': TT_RETURN,    # Return statement
 }
 
 # Global precedence table for binary operators
@@ -224,7 +235,11 @@ def ast_node_type_to_string(node_type):
         AST_NODE_COMPARE: "COMPARE",
         AST_NODE_LOGICAL: "LOGICAL",
         AST_NODE_BITOP: "BITOP",
-        AST_NODE_STRING: "STRING"
+        AST_NODE_STRING: "STRING",
+        AST_NODE_FUNCTION_DECL: "FUNCTION_DECL",
+        AST_NODE_FUNCTION_CALL: "FUNCTION_CALL",
+        AST_NODE_RETURN: "RETURN",
+        AST_NODE_PARAM: "PARAM"
     }
     return type_names.get(node_type, "UNKNOWN")
 
@@ -294,6 +309,9 @@ TOKEN_NAMES = {
     TT_ULONG_LITERAL: "TT_ULONG_LITERAL",
     TT_STRING_LITERAL: "TT_STRING_LITERAL",
     TT_TYPE_STRING: "TT_TYPE_STRING",
+    TT_DEF: "TT_DEF",
+    TT_RETURN: "TT_RETURN",
+    TT_COMMA: "TT_COMMA",
 }
 
 def token_name(token_type):
