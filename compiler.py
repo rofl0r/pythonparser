@@ -11,13 +11,22 @@ class ASTNode(object):
         self.node_type = node_type
 
     def eval(self, env):
-        raise NotImplementedError("Evaluation not implemented for this node")
+        raise CompilerException("Evaluation not implemented for this node")
 
 class NumberNode(ASTNode):
     def __init__(self, value, expr_type):
         ASTNode.__init__(self, AST_NODE_NUMBER)
         self.value = value
         self.expr_type = expr_type  # TYPE_INT, TYPE_FLOAT, TYPE_UINT, TYPE_LONG, TYPE_ULONG
+
+    def eval(self, env):
+        return self.value
+
+class StringNode(ASTNode):
+    def __init__(self, value):
+        ASTNode.__init__(self, AST_NODE_STRING)
+        self.value = value
+        self.expr_type = TYPE_STRING
 
     def eval(self, env):
         return self.value
@@ -30,7 +39,7 @@ class VariableNode(ASTNode):
 
     def eval(self, env):
         if self.name not in env:
-            raise RuntimeError("Variable '%s' is not defined" % self.name)
+            raise CompilerException("Variable '%s' is not defined" % self.name)
         return env[self.name]
 
 class BinaryOpNode(ASTNode):
@@ -46,6 +55,10 @@ class BinaryOpNode(ASTNode):
         right_val = self.right.eval(env)
         
         if self.operator == '+':
+            # Handle string concatenation
+            if self.left.expr_type == TYPE_STRING and self.right.expr_type == TYPE_STRING:
+                return left_val + right_val
+                
             return add(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '-':
             return subtract(left_val, right_val, self.left.expr_type, self.right.expr_type)
@@ -90,7 +103,7 @@ class AssignNode(ASTNode):
         # Check if type promotion is needed and allowed
         if self.expr_type != self.expr.expr_type:
             if not can_promote(self.expr.expr_type, self.expr_type):
-                raise TypeError("Cannot assign %s to %s"%(var_type_to_string(self.expr.expr_type), var_type_to_string(self.expr_type)))
+                raise CompilerException("Cannot assign %s to %s"%(var_type_to_string(self.expr.expr_type), var_type_to_string(self.expr_type)))
                 
         # Handle number literal promotion
         if self.expr.node_type == AST_NODE_NUMBER:
@@ -112,6 +125,11 @@ class CompoundAssignNode(ASTNode):
         expr_value = self.expr.eval(env)
         
         if self.op_type == TT_PLUS_ASSIGN:
+            # Handle string concatenation for += operator
+            if self.expr_type == TYPE_STRING:
+                if self.expr.expr_type != TYPE_STRING:
+                    raise CompilerException("Cannot use += with string and %s" % var_type_to_string(self.expr.expr_type))
+                return env.update({self.var_name: current_value + expr_value}) or (current_value + expr_value)
             result = add(current_value, expr_value, self.expr_type, self.expr.expr_type)
         elif self.op_type == TT_MINUS_ASSIGN:
             result = subtract(current_value, expr_value, self.expr_type, self.expr.expr_type)
@@ -208,7 +226,7 @@ class VarDeclNode(ASTNode):
         # Check if type promotion is needed and allowed
         if self.var_type != self.expr.expr_type:
             if not can_promote(self.expr.expr_type, self.var_type):
-                raise TypeError("Cannot assign %s to %s"%(var_type_to_string(self.expr.expr_type), var_type_to_string(self.var_type)))
+                raise CompilerException("Cannot assign %s to %s"%(var_type_to_string(self.expr.expr_type), var_type_to_string(self.var_type)))
 
         # For variable declarations, literals get special treatment
         # This supports writing code like: var x:uint = 42; (without 'u' suffix)
@@ -238,6 +256,19 @@ class CompareNode(ASTNode):
         left_val = self.left.eval(env)
         right_val = self.right.eval(env)
         
+        # Handle string comparison operations
+        if self.left.expr_type == TYPE_STRING and self.right.expr_type == TYPE_STRING:
+            if self.operator == '==':
+                return 1 if left_val == right_val else 0
+            elif self.operator == '!=':
+                return 1 if left_val != right_val else 0
+            # Other comparison operators are not supported for strings
+            elif self.operator in ['>', '>=', '<', '<=']:
+                raise CompilerException("Operator %s not supported for strings" % self.operator)
+            else:
+                # Unknown operator
+                raise CompilerException("Unknown comparison operator: %s" % self.operator)
+                
         if self.operator == '==':
             return compare_eq(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '!=':
@@ -308,6 +339,7 @@ class Lexer:
         self.op_map = {
             '+': self.handle_plus,
             '-': self.handle_minus,
+            '"': self.handle_string,
             '*': self.handle_mult,
             '/': self.handle_div,
             '%': self.handle_mod,
@@ -426,6 +458,31 @@ class Lexer:
             self.error("Expected integer literal suffix")
         
         return suffix.lower()  # Normalize to lowercase
+        
+    def handle_string(self):
+        """Handle string literals"""
+        # Record starting position for error reporting
+        start_line = self.line
+        start_column = self.column
+        
+        # Skip the opening quote
+        self.advance()
+        
+        # Start collecting string content
+        result = ""
+        while self.current_char is not None and self.current_char != '"':
+            result += self.current_char
+            self.advance()
+            
+        # Check if we ended because of a closing quote or end of input
+        if self.current_char is None:
+            self.error("Unterminated string literal")
+            
+        # Skip the closing quote
+        self.advance()
+        
+        # Create a string token
+        return Token(TT_STRING_LITERAL, result, start_line, start_column)
 
     def identifier(self):
         """
@@ -578,6 +635,9 @@ class Lexer:
             if self.current_char.isdigit():
                 return self.number()
 
+            if self.current_char == '"':
+                return self.handle_string()
+                
             if self.current_char.isalpha() or self.current_char == '_':
                 return self.identifier()
 
@@ -666,6 +726,9 @@ class Parser:
         # Handle number literals using the type mapping
         if t.type in TOKEN_TO_TYPE_MAP:
             return NumberNode(t.value, TOKEN_TO_TYPE_MAP[t.type])
+        
+        if t.type == TT_STRING_LITERAL:
+            return StringNode(t.value)
             
         if t.type == TT_IDENT:
             var_name = t.value
@@ -723,12 +786,16 @@ class Parser:
                 self.error("Type mismatch in binary operation: %s and %s" %
                           (var_type_to_string(left.expr_type), var_type_to_string(right.expr_type)))
             
-            # Determine result type based on operands using the TYPE_PRECEDENCE list
-            if left.expr_type != TYPE_UNKNOWN and left.expr_type == right.expr_type:
+            # Special handling for string concatenation
+            if t.type == TT_PLUS and (left.expr_type == TYPE_STRING or right.expr_type == TYPE_STRING):
+                if left.expr_type != TYPE_STRING or right.expr_type != TYPE_STRING:
+                    self.error("Cannot concatenate string with non-string type")
+                result_type = TYPE_STRING
+            # Normal case - determine result type based on operands
+            elif left.expr_type != TYPE_UNKNOWN and left.expr_type == right.expr_type:
                 result_type = left.expr_type
             else:
-                result_type = TYPE_INT
-                # Use the type with the highest precedence
+                # Use the type with the highest precedence from TYPE_PRECEDENCE list
                 for tp in TYPE_PRECEDENCE:
                     if left.expr_type == tp or right.expr_type == tp:
                         result_type = tp
@@ -943,7 +1010,7 @@ class Parser:
             self.check_statement_end()
             return ExprStmtNode(expr)
         elif self.token.type in [TT_INT_LITERAL, TT_UINT_LITERAL, TT_LONG_LITERAL, TT_ULONG_LITERAL, 
-                                TT_FLOAT_LITERAL, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
+                                TT_FLOAT_LITERAL, TT_STRING_LITERAL, TT_LPAREN, TT_MINUS, TT_NOT, TT_BITNOT]:
             # Also handle expressions that start with other tokens
             expr = self.expression(0)
             self.check_statement_end()
@@ -985,4 +1052,3 @@ def run(text):
         return {'success': True, 'env': env, 'ast': ast}
     except CompilerException as e:
         return {'success': False, 'error': str(e), 'ast': None}
-
