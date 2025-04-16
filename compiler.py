@@ -916,9 +916,8 @@ class Parser:
                 # Check if variable is a constant (declared with 'let')
                 if var in self.constants:
                     self.error("Cannot reassign to constant '%s'" % var)
-                    
+                
                 op = self.token.type
-                op_value = self.token.value
                 var_type = self.var_types.get(var, TYPE_UNKNOWN)
                 
                 # Advance past the operator
