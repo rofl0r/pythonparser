@@ -729,9 +729,9 @@ class Parser:
             else:
                 result_type = TYPE_INT
                 # Use the type with the highest precedence
-                for t in TYPE_PRECEDENCE:
-                    if left.expr_type == t or right.expr_type == t:
-                        result_type = t
+                for tp in TYPE_PRECEDENCE:
+                    if left.expr_type == tp or right.expr_type == tp:
+                        result_type = tp
                         break
             
             return BinaryOpNode(t.value, left, right, result_type)
