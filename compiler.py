@@ -66,12 +66,12 @@ class BinaryOpNode(ASTNode):
     def eval(self, env):
         left_val = self.left.eval(env)
         right_val = self.right.eval(env)
-        
+
         if self.operator == '+':
             # Handle string concatenation
             if self.left.expr_type == TYPE_STRING and self.right.expr_type == TYPE_STRING:
                 return left_val + right_val
-                
+
             return add(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '-':
             return subtract(left_val, right_val, self.left.expr_type, self.right.expr_type)
@@ -101,7 +101,7 @@ class UnaryOpNode(ASTNode):
 
     def eval(self, env):
         value = self.operand.eval(env)
-        
+
         if self.operator == '-':
             return negate(value, self.operand.expr_type)
         elif self.operator == '!':
@@ -120,19 +120,19 @@ class AssignNode(ASTNode):
         self.var_name = var_name
         self.expr = expr
         self.expr_type = var_type
-        
+
     def eval(self, env):
         value = self.expr.eval(env)
-        
+
         # Check if type promotion is needed and allowed
         if self.expr_type != self.expr.expr_type:
             if not can_promote(self.expr.expr_type, self.expr_type):
                 raise CompilerException("Cannot assign %s to %s"%(var_type_to_string(self.expr.expr_type), var_type_to_string(self.expr_type)))
-                
+
         # Handle number literal promotion
         if self.expr.node_type == AST_NODE_NUMBER:
             value = promote_literal_if_needed(value, self.expr.expr_type, self.expr_type)
-        
+
         env.set(self.var_name, value)
         return value
 
@@ -152,7 +152,7 @@ class CompoundAssignNode(ASTNode):
     def eval(self, env):
         current_value = env.get(self.var_name)
         expr_value = self.expr.eval(env)
-        
+
         if self.op_type == TT_PLUS_ASSIGN:
             # Handle string concatenation for += operator
             if self.expr_type == TYPE_STRING:
@@ -169,7 +169,7 @@ class CompoundAssignNode(ASTNode):
             result = divide(current_value, expr_value, self.expr_type, self.expr.expr_type)
         elif self.op_type == TT_MOD_ASSIGN:
             result = modulo(current_value, expr_value, self.expr_type, self.expr.expr_type)
-            
+
         env.set(self.var_name, result)
         return result
 
@@ -288,7 +288,7 @@ class VarDeclNode(ASTNode):
 
     def eval(self, env):
         value = self.expr.eval(env)
-        
+
         # Check if type promotion is needed and allowed
         if self.var_type != self.expr.expr_type:
             if not can_promote(self.expr.expr_type, self.var_type):
@@ -299,7 +299,7 @@ class VarDeclNode(ASTNode):
         if self.expr.node_type == AST_NODE_NUMBER:
             # No actual value transformation needed for most numeric types
             pass
-        
+
         env.set(self.var_name, value)
         return value
 
@@ -360,45 +360,45 @@ class FunctionCallNode(ASTNode):
         # Get function from function map
         if not env.has_function(self.name):
             raise CompilerException("Function '%s' is not defined" % self.name)
-        
+
         func = env.get_function(self.name)
         if not isinstance(func, FunctionDeclNode):
             raise CompilerException("'%s' is not a function" % self.name)
-        
+
         # Enter a new scope for function execution
         env.enter_scope()
-        
+
         # Evaluate arguments and bind to parameters
         if len(self.args) != len(func.params):
             env.leave_scope()  # Clean up before raising exception
             raise CompilerException("Function '%s' expects %d arguments, got %d" % 
                                   (self.name, len(func.params), len(self.args)))
-        
+
         for (param_name, param_type), arg in zip(func.params, self.args):
             arg_value = arg.eval(env)
             env.set(param_name, arg_value)
-        
+
         result = None  # Default return value for void functions
-        
+
         try:
             # Execute function body
             for stmt in func.body:
                 stmt.eval(env)
-            
+
             # If no return statement was encountered and function is not void,
             # we should raise an error
             if func.return_type != TYPE_VOID:
                 env.leave_scope()  # Clean up before raising exception
                 raise CompilerException("Function '%s' has non-void return type but reached end of function without return" % self.name)
-            
+
         except ReturnException as ret:
             # Check return value type against function's return type
             if func.return_type == TYPE_VOID and ret.value is not None:
                 env.leave_scope()  # Clean up before raising exception
                 raise CompilerException("Void function '%s' returned a value" % self.name)
-            
+
             result = ret.value
-        
+
         # Leave function scope
         env.leave_scope()
         return result
@@ -418,7 +418,7 @@ class CompareNode(ASTNode):
     def eval(self, env):
         left_val = self.left.eval(env)
         right_val = self.right.eval(env)
-        
+
         # Handle string comparison operations
         if self.left.expr_type == TYPE_STRING and self.right.expr_type == TYPE_STRING:
             if self.operator == '==':
@@ -431,7 +431,7 @@ class CompareNode(ASTNode):
             else:
                 # Unknown operator
                 raise CompilerException("Unknown comparison operator: %s" % self.operator)
-                
+
         if self.operator == '==':
             return compare_eq(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '!=':
@@ -458,7 +458,7 @@ class LogicalNode(ASTNode):
 
     def eval(self, env):
         left_val = self.left.eval(env)
-        
+
         if self.operator == 'and':
             return logical_and(left_val, self.right.eval(env))
         elif self.operator == 'or':
@@ -478,7 +478,7 @@ class BitOpNode(ASTNode):
     def eval(self, env):
         left_val = self.left.eval(env)
         right_val = self.right.eval(env)
-        
+
         if self.operator == '&':
             return bitwise_and(left_val, right_val, self.left.expr_type, self.right.expr_type)
         elif self.operator == '|':
@@ -630,33 +630,33 @@ class Lexer:
         # Record starting position for error reporting
         start_line = self.line
         start_column = self.column
-        
+
         # Skip the opening quote
         self.advance()
-        
+
         # Start collecting string content
         result = ""
         while self.current_char is not None and self.current_char != '"':
             result += self.current_char
             self.advance()
-            
+
         # Check if we ended because of a closing quote or end of input
         if self.current_char is None:
             self.error("Unterminated string literal")
-            
+
         # Skip the closing quote
         self.advance()
-        
+
         # Create a string token
         return Token(TT_STRING_LITERAL, result, start_line, start_column)
 
     def identifier(self):
         """
         Parse an identifier or keyword using the global KEYWORDS hashtable.
-        
+
         Valid identifiers start with a letter or underscore and can contain 
         letters, digits, or underscores.
-        
+
         Keywords are checked against the global KEYWORDS dictionary.
         """
         start = self.pos
@@ -728,7 +728,7 @@ class Lexer:
 class BreakException(Exception):
     """Raised when a break statement is encountered"""
     pass
-    
+
 class ReturnException(Exception):
     """Raised when a return statement is encountered"""
     def __init__(self, value=None):
@@ -744,7 +744,7 @@ class EnvironmentStack:
         self.stack = [{}]  # Start with global scope at index 0
         self.stackptr = 0
         self.function_map = {}  # Map of function names to function nodes
-        
+
     def enter_scope(self):
         """Enter a new scope - reuse existing or create new one"""
         self.stackptr += 1
@@ -753,12 +753,12 @@ class EnvironmentStack:
         else:
             # Reuse existing dict but clear it
             self.stack[self.stackptr].clear()
-    
+
     def leave_scope(self):
         """Leave current scope and return to previous"""
         if self.stackptr > 0:
             self.stackptr -= 1
-    
+
     def get(self, name):
         """Get a variable value looking through all accessible scopes"""
         # Search from current scope down to global
@@ -766,26 +766,26 @@ class EnvironmentStack:
             if name in self.stack[i]:
                 return self.stack[i][name]
         raise KeyError(name)
-    
+
     def has(self, name):
         """Check if a variable exists in any accessible scope"""
         for i in range(self.stackptr, -1, -1):
             if name in self.stack[i]:
                 return True
         return False
-    
+
     def set(self, name, value):
         """Set a variable in the current scope"""
         self.stack[self.stackptr][name] = value
-    
+
     def register_function(self, name, func_node):
         """Register a function in the function map"""
         self.function_map[name] = func_node
-    
+
     def has_function(self, name):
         """Check if a function exists in the function map"""
         return name in self.function_map
-    
+
     def get_function(self, name):
         """Get a function from the function map"""
         return self.function_map[name]
@@ -799,16 +799,16 @@ class Parser:
         self.lexer = lexer
         self.token = self.lexer.next_token() # Current token
         self.prev_token = None  # Previous token (for better error messages)
-        
+
         # Per-scope tracking structures
         self.scopes = ["global"]  # Stack of scope names
         self.variables = {"global": set()}  # Track declared variables per scope
         self.constants = {"global": set()}  # Track constants (let declarations) per scope
         self.var_types = {"global": {}}     # Track variable types per scope
-        
+
         # Track if we've seen functions - used to enforce globals-before-functions rule
         self.seen_main_function = False
-        
+
         self.functions = {}     # Track function declarations (name -> (params, return_type))
         self.current_function = None  # Track current function for return checking
 
@@ -818,12 +818,12 @@ class Parser:
         self.variables[scope_name] = set()
         self.constants[scope_name] = set()
         self.var_types[scope_name] = {}
-    
+
     def leave_scope(self):
         """Leave the current scope"""
         if len(self.scopes) > 1:  # Don't leave global scope
             self.scopes.pop()
-    
+
     def current_scope(self):
         """Get the current scope name"""
         return self.scopes[-1]
@@ -838,7 +838,7 @@ class Parser:
             if var_name in self.variables[scope]:
                 return True
         return False
-    
+
     def is_constant(self, var_name):
         """Check if a variable is a constant in any accessible scope"""
         # Check all scopes from current to global
@@ -846,7 +846,7 @@ class Parser:
             if var_name in self.constants[scope]:
                 return True
         return False
-    
+
     def get_variable_type(self, var_name):
         """Get a variable's type from the appropriate scope"""
         # Check all scopes from current to global
@@ -854,20 +854,20 @@ class Parser:
             if var_name in self.var_types[scope]:
                 return self.var_types[scope][var_name]
         return TYPE_UNKNOWN
-    
+
     def declare_variable(self, var_name, var_type, is_const=False):
         """Declare a variable in the current scope"""
         current = self.current_scope()
         # Check if already declared in current scope
         if var_name in self.variables[current]:
             return False  # Already declared in this scope
-            
+
         self.variables[current].add(var_name)
         self.var_types[current][var_name] = var_type
         if is_const:
             self.constants[current].add(var_name)
         return True
-        
+
     def error(self, message):
         token_type_name = token_name(self.token.type)
         raise CompilerException("%s at line %d, column %d. Token: %s (%s)" %
@@ -886,7 +886,7 @@ class Parser:
             actual_type_name = token_name(self.token.type)
             self.error('Expected %s but got %s' %
                        (expected_type_name, actual_type_name))
-                       
+
     def lbp(self, t):
         return BINARY_PRECEDENCE.get(t.type, 0)
 
@@ -1028,16 +1028,16 @@ class Parser:
             # Get the variable type from the appropriate scope
             var_type = self.get_variable_type(var_name)
             return VariableNode(var_name, var_type)
-            
+
         if t.type in [TT_MINUS, TT_NOT, TT_BITNOT]:  # Unary operators
             expr = self.expression(UNARY_PRECEDENCE)
             return UnaryOpNode(t.value, expr, expr.expr_type)
-            
+
         if t.type == TT_LPAREN:
             expr = self.expression(0)
             self.consume(TT_RPAREN)
             return expr
-            
+
         raise CompilerException('Unexpected token type %d' % t.type)
 
     def led(self, t, left):
@@ -1050,33 +1050,33 @@ class Parser:
             # Get variable name from left side
             var_name = left.name
             var_type = self.get_variable_type(var_name)
-            
+
             # Check if variable is a constant (declared with 'let')
             if self.is_constant(var_name):
                 self.error("Cannot reassign to constant '%s'" % var_name)
-                
+
             # Parse the right side expression
             right = self.expression(0)
-            
+
             # For assignments in conditions (e.g. while x = y do),
             # use the fully resolved types
             if right.node_type == AST_NODE_VARIABLE:
                 right_var = right.name
                 right_type = self.get_variable_type(right_var)
-            
+
             # Check type compatibility
             self.check_type_compatibility(var_name, right.expr_type)
-            
+
             return AssignNode(var_name, right, var_type)
-            
+
         if t.type in [TT_PLUS, TT_MINUS, TT_MULT, TT_DIV, TT_MOD, TT_SHL, TT_SHR]:
             right = self.expression(self.lbp(t))
-            
+
             # If types don't match, we need to fail
             if left.expr_type != right.expr_type and left.expr_type != TYPE_UNKNOWN and right.expr_type != TYPE_UNKNOWN and not can_promote(right.expr_type, left.expr_type):
                 self.error("Type mismatch in binary operation: %s and %s" %
                           (var_type_to_string(left.expr_type), var_type_to_string(right.expr_type)))
-            
+
             # Special handling for string concatenation
             if t.type == TT_PLUS and (left.expr_type == TYPE_STRING or right.expr_type == TYPE_STRING):
                 if left.expr_type != TYPE_STRING or right.expr_type != TYPE_STRING:
@@ -1091,24 +1091,24 @@ class Parser:
                     if left.expr_type == tp or right.expr_type == tp:
                         result_type = tp
                         break
-            
+
             return BinaryOpNode(t.value, left, right, result_type)
-            
+
         elif t.type in [TT_EQ, TT_NE, TT_GE, TT_LE, TT_LT, TT_GT]:
             right = self.expression(self.lbp(t))
             # Comparisons always return an integer (0/1 representing false/true)
             return CompareNode(t.value, left, right)
-            
+
         elif t.type in [TT_AND, TT_OR]:
             right = self.expression(self.lbp(t))
             # Logical operations always return an integer (0/1 representing false/true)
             return LogicalNode(t.value, left, right)
-            
+
         elif t.type in [TT_XOR, TT_BITOR, TT_BITAND]:
             right = self.expression(self.lbp(t))
             # Bit operations are performed on integers and return integers
             return BitOpNode(t.value, left, right)
-            
+
         raise CompilerException('Unexpected token type %d' % t.type)
 
     def parse_type(self):
@@ -1212,53 +1212,53 @@ class Parser:
                 self.error("'return' statement outside function")
 
             self.advance()
-            
+
             # Return with no value
             if self.token.type in [TT_SEMI, TT_EOF] or (self.prev_token and self.token.line > self.prev_token.line):
                 self.check_statement_end()
                 return ReturnNode(None)
-                
+
             # Return with value
             expr = self.expression(0)
-            
+
             # Check if return type matches function return type
             func_return_type = self.functions[self.current_function][1]
             if func_return_type == TYPE_VOID:
                 self.error("Void function '%s' cannot return a value" % self.current_function)
-                
+
             self.check_statement_end()
             return ReturnNode(expr)
-        
+
         # Handle variable declarations (var and let)
         if self.token.type in [TT_VAR, TT_LET]:
             decl_type = self.token.type  # Save the declaration type (var or let)
             self.advance()
-            
+
             # Expect an identifier after var/let
             if self.token.type != TT_IDENT:
                 self.error("Expected identifier after '%s'" % ('var' if decl_type == TT_VAR else 'let'))
-                
+
             var_name = self.token.value
             self.advance()
-            
+
             # Process type annotation if present
             var_type = self.parse_type()  # This will consume the type if present
-            
+
             # Check for assignment operator
             if self.token.type == TT_TYPE_ASSIGN:
                 # Type inference assignment (:=)
                 self.advance()  # Skip the := operator
-                
+
                 # Parse the initializer expression
                 expr = self.expression(0)
-                
+
                 # In global scope, ensure only literal initializers
                 if self.current_function is None and self.seen_main_function:
                     self.error("Global variables must be declared before main function")
-                
+
                 if self.current_function is None and not is_literal_node(expr):
                     self.error("Global variables can only be initialized with literals")
-                    
+
                 # Infer the type from expression
                 if expr.node_type == AST_NODE_NUMBER:
                     var_type = expr.expr_type
@@ -1354,28 +1354,28 @@ class Parser:
                     # Check if variable is a constant (declared with 'let')
                     if self.is_constant(var):
                         self.error("Cannot reassign to constant '%s'" % var)
-                
+
                     op = self.token.type
                     var_type = self.get_variable_type(var)
-                
+
                     # Advance past the operator
                     self.advance()
-                
+
                     # Parse the expression
                     expr = self.expression(0)
-                
+
                     # Check type compatibility for assignments
                     self.check_type_compatibility(var, expr.expr_type)
-                
+
                     # For compound operators, use CompoundAssignNode
                     if op != TT_ASSIGN:
                         self.check_statement_end()
                         return CompoundAssignNode(op, var, expr, var_type)
-                    
+
                     # Regular assignment
                     self.check_statement_end()
                     return AssignNode(var, expr, var_type)
-                
+
                 # Handle expression statements (e.g., an identifier by itself)
                 var_type = self.get_variable_type(var)
                 expr = VariableNode(var, var_type)
@@ -1387,15 +1387,15 @@ class Parser:
             expr = self.expression(0)
             self.check_statement_end()
             return ExprStmtNode(expr)
-            
+
         # If we're in global scope and not at a var/let/function declaration, error
         if self.current_function is None:
             self.error("Only variable declarations and function declarations are allowed in global scope")
-            
+
         token_type_name = token_name(self.token.type)
         self.error('Invalid statement starting with "%s" (%s)' %
                   (self.token.value, token_type_name))
-                  
+
     def check_statement_end(self, allow_also=None):
         """Check if a statement is properly terminated by semicolon, newline, or EOF"""
         # Allow specific token (e.g. "do" for assignments in if/while conditions)
@@ -1425,39 +1425,39 @@ def run(text):
         # Parse the program
         program = parser.parse()
         ast = program
-        
+
         # Create environment stack for execution
         env = EnvironmentStack()
-        
+
         # First execute global variable declarations
         for node in program:
             if node.node_type == AST_NODE_VAR_DECL:
                 node.eval(env)
-        
+
         # Register functions in the function map (but don't execute them)
         for node in program:
             if node.node_type == AST_NODE_FUNCTION_DECL:
                 env.register_function(node.name, node)
-        
+
         # Check if main function exists
         if not env.has_function("main"):
             return {'success': False, 'error': "No 'main' function defined", 'ast': ast}
-        
+
         # Get main function
         main_func = env.get_function("main")
-        
+
         # Make sure main has no parameters
         if len(main_func.params) > 0:
             return {'success': False, 'error': "Function 'main' cannot have parameters", 'ast': ast}
-        
+
         # Create a new scope for main function
         env.enter_scope()
-        
+
         try:
             # Execute main function
             for stmt in main_func.body:
                 stmt.eval(env)
-                
+
             # Return both global and main's environment
             return {
                 'success': True,
@@ -1476,4 +1476,4 @@ def run(text):
             }
     except CompilerException as e:
         return {'success': False, 'error': str(e), 'ast': None}
-                  
+
