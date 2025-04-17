@@ -1,5 +1,5 @@
 # Test framework for compiler.py
-from compiler import *
+from interpreter import run
 import os
 
 def test():

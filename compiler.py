@@ -1,8 +1,5 @@
 # Implementation of a Pratt parser in Python 2.7
 
-from interpreter import add, subtract, multiply, divide, modulo, shift_left, shift_right, negate
-from interpreter import logical_not, bitwise_not, logical_and, logical_or, bitwise_and, bitwise_or, bitwise_xor
-from interpreter import compare_eq, compare_ne, compare_ge, compare_gt, compare_lt, compare_le
 from shared import *
 from lexer import Token, Lexer
 
@@ -11,9 +8,6 @@ class ASTNode(object):
     def __init__(self, node_type=AST_NODE_BASE):
         self.node_type = node_type
         self.expr_type = TYPE_UNKNOWN
-
-    def eval(self, env):
-        raise CompilerException("Evaluation not implemented for this node")
 
     def __repr__(self):
         return "%s" % ast_node_type_to_string(self.node_type)
@@ -24,9 +18,6 @@ class NumberNode(ASTNode):
         self.value = value
         self.expr_type = expr_type  # TYPE_INT, TYPE_FLOAT, TYPE_UINT, TYPE_LONG, TYPE_ULONG
 
-    def eval(self, env):
-        return self.value
-
     def __repr__(self):
         return "Number(%s, %s)" % (self.value, var_type_to_string(self.expr_type))
 
@@ -36,9 +27,6 @@ class StringNode(ASTNode):
         self.value = value
         self.expr_type = TYPE_STRING
 
-    def eval(self, env):
-        return self.value
-
     def __repr__(self):
         return "String(\"%s\")" % self.value
 
@@ -47,11 +35,6 @@ class VariableNode(ASTNode):
         ASTNode.__init__(self, AST_NODE_VARIABLE)
         self.name = name
         self.expr_type = var_type
-
-    def eval(self, env):
-        if not env.has(self.name):
-            raise CompilerException("Variable '%s' is not defined" % self.name)
-        return env.get(self.name)
 
     def __repr__(self):
         return "Var(%s, %s)" % (self.name, var_type_to_string(self.expr_type))
@@ -63,29 +46,6 @@ class BinaryOpNode(ASTNode):
         self.left = left
         self.right = right
         self.expr_type = result_type
-
-    def eval(self, env):
-        left_val = self.left.eval(env)
-        right_val = self.right.eval(env)
-
-        if self.operator == '+':
-            # Handle string concatenation
-            if self.left.expr_type == TYPE_STRING and self.right.expr_type == TYPE_STRING:
-                return left_val + right_val
-
-            return add(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '-':
-            return subtract(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '*':
-            return multiply(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '/':
-            return divide(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '%':
-            return modulo(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == 'shl':
-            return shift_left(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == 'shr':
-            return shift_right(left_val, right_val, self.left.expr_type, self.right.expr_type)
 
     def __repr__(self):
         return "BinaryOp(%s, %s, %s) -> %s" % (
@@ -100,16 +60,6 @@ class UnaryOpNode(ASTNode):
         self.operand = operand
         self.expr_type = result_type
 
-    def eval(self, env):
-        value = self.operand.eval(env)
-
-        if self.operator == '-':
-            return negate(value, self.operand.expr_type)
-        elif self.operator == '!':
-            return logical_not(value)
-        elif self.operator == 'bitnot':
-            return bitwise_not(value, self.operand.expr_type)
-
     def __repr__(self):
         return "UnaryOp(%s, %s) -> %s" % (
             self.operator, repr(self.operand), var_type_to_string(self.expr_type)
@@ -121,21 +71,6 @@ class AssignNode(ASTNode):
         self.var_name = var_name
         self.expr = expr
         self.expr_type = var_type
-
-    def eval(self, env):
-        value = self.expr.eval(env)
-
-        # Check if type promotion is needed and allowed
-        if self.expr_type != self.expr.expr_type:
-            if not can_promote(self.expr.expr_type, self.expr_type):
-                raise CompilerException("Cannot assign %s to %s"%(var_type_to_string(self.expr.expr_type), var_type_to_string(self.expr_type)))
-
-        # Handle number literal promotion
-        if self.expr.node_type == AST_NODE_NUMBER:
-            value = promote_literal_if_needed(value, self.expr.expr_type, self.expr_type)
-
-        env.set(self.var_name, value)
-        return value
 
     def __repr__(self):
         return "Assign(%s, %s) -> %s" % (
@@ -150,30 +85,6 @@ class CompoundAssignNode(ASTNode):
         self.expr = expr
         self.expr_type = var_type
 
-    def eval(self, env):
-        current_value = env.get(self.var_name)
-        expr_value = self.expr.eval(env)
-
-        if self.op_type == TT_PLUS_ASSIGN:
-            # Handle string concatenation for += operator
-            if self.expr_type == TYPE_STRING:
-                if self.expr.expr_type != TYPE_STRING:
-                    raise CompilerException("Cannot use += with string and %s" % var_type_to_string(self.expr.expr_type))
-                result = current_value + expr_value
-            else:
-                result = add(current_value, expr_value, self.expr_type, self.expr.expr_type)
-        elif self.op_type == TT_MINUS_ASSIGN:
-            result = subtract(current_value, expr_value, self.expr_type, self.expr.expr_type)
-        elif self.op_type == TT_MULT_ASSIGN:
-            result = multiply(current_value, expr_value, self.expr_type, self.expr.expr_type)
-        elif self.op_type == TT_DIV_ASSIGN:
-            result = divide(current_value, expr_value, self.expr_type, self.expr.expr_type)
-        elif self.op_type == TT_MOD_ASSIGN:
-            result = modulo(current_value, expr_value, self.expr_type, self.expr.expr_type)
-
-        env.set(self.var_name, result)
-        return result
-
     def __repr__(self):
         op_name = token_name(self.op_type)
         return "CompoundAssign(%s, %s, %s) -> %s" % (
@@ -185,11 +96,6 @@ class PrintNode(ASTNode):
         ASTNode.__init__(self, AST_NODE_PRINT)
         self.expr = expr
 
-    def eval(self, env):
-        value = self.expr.eval(env)
-        print(value)
-        return value
-
     def __repr__(self):
         return "Print(%s)" % repr(self.expr)
 
@@ -199,15 +105,6 @@ class IfNode(ASTNode):
         self.condition = condition
         self.then_body = then_body  # List of statement nodes
         self.else_body = else_body  # List of statement nodes or None
-
-    def eval(self, env):
-        if self.condition.eval(env):
-            for stmt in self.then_body:
-                stmt.eval(env)
-        elif self.else_body:
-            for stmt in self.else_body:
-                stmt.eval(env)
-        return 0
 
     def __repr__(self):
         if self.else_body:
@@ -228,20 +125,6 @@ class WhileNode(ASTNode):
         self.condition = condition
         self.body = body  # List of statement nodes
 
-    def eval(self, env):
-        while self.condition.eval(env):
-            try:
-                for stmt in self.body:
-                    try:
-                        stmt.eval(env)
-                    except ContinueException:
-                        break
-                    except BreakException:
-                        raise
-            except BreakException:
-                break
-        return 0
-
     def __repr__(self):
         return "While(%s, [%s])" % (
             repr(self.condition),
@@ -252,18 +135,12 @@ class BreakNode(ASTNode):
     def __init__(self):
         ASTNode.__init__(self, AST_NODE_BREAK)
 
-    def eval(self, env):
-        raise BreakException()
-
     def __repr__(self):
         return "Break()"
 
 class ContinueNode(ASTNode):
     def __init__(self):
         ASTNode.__init__(self, AST_NODE_CONTINUE)
-
-    def eval(self, env):
-        raise ContinueException()
 
     def __repr__(self):
         return "Continue()"
@@ -272,9 +149,6 @@ class ExprStmtNode(ASTNode):
     def __init__(self, expr):
         ASTNode.__init__(self, AST_NODE_EXPR_STMT)
         self.expr = expr
-
-    def eval(self, env):
-        return self.expr.eval(env)
 
     def __repr__(self):
         return "ExprStmt(%s)" % repr(self.expr)
@@ -286,23 +160,6 @@ class VarDeclNode(ASTNode):
         self.var_name = var_name
         self.var_type = var_type
         self.expr = expr
-
-    def eval(self, env):
-        value = self.expr.eval(env)
-
-        # Check if type promotion is needed and allowed
-        if self.var_type != self.expr.expr_type:
-            if not can_promote(self.expr.expr_type, self.var_type):
-                raise CompilerException("Cannot assign %s to %s"%(var_type_to_string(self.expr.expr_type), var_type_to_string(self.var_type)))
-
-        # For variable declarations, literals get special treatment
-        # This supports writing code like: var x:uint = 42; (without 'u' suffix)
-        if self.expr.node_type == AST_NODE_NUMBER:
-            # No actual value transformation needed for most numeric types
-            pass
-
-        env.set(self.var_name, value)
-        return value
 
     def __repr__(self):
         decl_type_str = "var" if self.decl_type == TT_VAR else "let"
@@ -319,11 +176,6 @@ class FunctionDeclNode(ASTNode):
         self.body = body
         self.expr_type = return_type
 
-    def eval(self, env):
-        # Store function in the environment
-        env.set(self.name, self)
-        return 0
-
     def __repr__(self):
         params_str = ", ".join(["%s:%s" % (name, var_type_to_string(ptype)) for name, ptype in self.params])
         return "Function(%s(%s):%s, [%s])" % (
@@ -339,11 +191,6 @@ class ReturnNode(ASTNode):
         self.expr = expr  # Can be None for return with no value
         self.expr_type = TYPE_VOID if expr is None else (expr.expr_type if hasattr(expr, 'expr_type') else TYPE_UNKNOWN)
 
-    def eval(self, env):
-        value = None if self.expr is None else self.expr.eval(env)
-        # Throw a special exception to unwind the call stack
-        raise ReturnException(value)
-
     def __repr__(self):
         if self.expr:
             return "Return(%s)" % repr(self.expr)
@@ -357,53 +204,6 @@ class FunctionCallNode(ASTNode):
         self.args = args
         self.expr_type = expr_type  # Will be set during type checking
 
-    def eval(self, env):
-        # Get function from function map
-        if not env.has_function(self.name):
-            raise CompilerException("Function '%s' is not defined" % self.name)
-
-        func = env.get_function(self.name)
-        if not isinstance(func, FunctionDeclNode):
-            raise CompilerException("'%s' is not a function" % self.name)
-
-        # Enter a new scope for function execution
-        env.enter_scope()
-
-        # Evaluate arguments and bind to parameters
-        if len(self.args) != len(func.params):
-            env.leave_scope()  # Clean up before raising exception
-            raise CompilerException("Function '%s' expects %d arguments, got %d" % 
-                                  (self.name, len(func.params), len(self.args)))
-
-        for (param_name, param_type), arg in zip(func.params, self.args):
-            arg_value = arg.eval(env)
-            env.set(param_name, arg_value)
-
-        result = None  # Default return value for void functions
-
-        try:
-            # Execute function body
-            for stmt in func.body:
-                stmt.eval(env)
-
-            # If no return statement was encountered and function is not void,
-            # we should raise an error
-            if func.return_type != TYPE_VOID:
-                env.leave_scope()  # Clean up before raising exception
-                raise CompilerException("Function '%s' has non-void return type but reached end of function without return" % self.name)
-
-        except ReturnException as ret:
-            # Check return value type against function's return type
-            if func.return_type == TYPE_VOID and ret.value is not None:
-                env.leave_scope()  # Clean up before raising exception
-                raise CompilerException("Void function '%s' returned a value" % self.name)
-
-            result = ret.value
-
-        # Leave function scope
-        env.leave_scope()
-        return result
-
     def __repr__(self):
         args_str = ", ".join(repr(arg) for arg in self.args)
         return "Call(%s(%s))" % (self.name, args_str)
@@ -416,36 +216,6 @@ class CompareNode(ASTNode):
         self.right = right
         self.expr_type = TYPE_INT  # Comparisons always return int
 
-    def eval(self, env):
-        left_val = self.left.eval(env)
-        right_val = self.right.eval(env)
-
-        # Handle string comparison operations
-        if self.left.expr_type == TYPE_STRING and self.right.expr_type == TYPE_STRING:
-            if self.operator == '==':
-                return 1 if left_val == right_val else 0
-            elif self.operator == '!=':
-                return 1 if left_val != right_val else 0
-            # Other comparison operators are not supported for strings
-            elif self.operator in ['>', '>=', '<', '<=']:
-                raise CompilerException("Operator %s not supported for strings" % self.operator)
-            else:
-                # Unknown operator
-                raise CompilerException("Unknown comparison operator: %s" % self.operator)
-
-        if self.operator == '==':
-            return compare_eq(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '!=':
-            return compare_ne(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '>=':
-            return compare_ge(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '>':
-            return compare_gt(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '<':
-            return compare_lt(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '<=':
-            return compare_le(left_val, right_val, self.left.expr_type, self.right.expr_type)
-
     def __repr__(self):
         return "Compare(%s, %s, %s)" % (self.operator, repr(self.left), repr(self.right))
 
@@ -456,14 +226,6 @@ class LogicalNode(ASTNode):
         self.left = left
         self.right = right
         self.expr_type = TYPE_INT  # Logical ops always return int
-
-    def eval(self, env):
-        left_val = self.left.eval(env)
-
-        if self.operator == 'and':
-            return logical_and(left_val, self.right.eval(env))
-        elif self.operator == 'or':
-            return logical_or(left_val, self.right.eval(env))
 
     def __repr__(self):
         return "Logical(%s, %s, %s)" % (self.operator, repr(self.left), repr(self.right))
@@ -476,85 +238,8 @@ class BitOpNode(ASTNode):
         self.right = right
         self.expr_type = TYPE_INT  # Bitwise ops always return int
 
-    def eval(self, env):
-        left_val = self.left.eval(env)
-        right_val = self.right.eval(env)
-
-        if self.operator == '&':
-            return bitwise_and(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == '|':
-            return bitwise_or(left_val, right_val, self.left.expr_type, self.right.expr_type)
-        elif self.operator == 'xor':
-            return bitwise_xor(left_val, right_val, self.left.expr_type, self.right.expr_type)
-
     def __repr__(self):
         return "BitOp(%s, %s, %s)" % (self.operator, repr(self.left), repr(self.right))
-
-# Custom exceptions for control flow
-class BreakException(Exception):
-    """Raised when a break statement is encountered"""
-    pass
-
-class ReturnException(Exception):
-    """Raised when a return statement is encountered"""
-    def __init__(self, value=None):
-        self.value = value
-
-class ContinueException(Exception):
-    """Raised when a continue statement is encountered"""
-    pass
-
-class EnvironmentStack:
-    """Stack-based environment implementation with support for scopes"""
-    def __init__(self):
-        self.stack = [{}]  # Start with global scope at index 0
-        self.stackptr = 0
-        self.function_map = {}  # Map of function names to function nodes
-
-    def enter_scope(self):
-        """Enter a new scope - reuse existing or create new one"""
-        self.stackptr += 1
-        if self.stackptr >= len(self.stack):
-            self.stack.append({})
-        else:
-            # Reuse existing dict but clear it
-            self.stack[self.stackptr].clear()
-
-    def leave_scope(self):
-        """Leave current scope and return to previous"""
-        if self.stackptr > 0:
-            self.stackptr -= 1
-
-    def get(self, name):
-        """Get a variable value looking through all accessible scopes"""
-        # Search from current scope down to global
-        for i in range(self.stackptr, -1, -1):
-            if name in self.stack[i]:
-                return self.stack[i][name]
-        raise KeyError(name)
-
-    def has(self, name):
-        """Check if a variable exists in any accessible scope"""
-        for i in range(self.stackptr, -1, -1):
-            if name in self.stack[i]:
-                return True
-        return False
-
-    def set(self, name, value):
-        """Set a variable in the current scope"""
-        self.stack[self.stackptr][name] = value
-
-    def register_function(self, name, func_node):
-        """Register a function in the function map"""
-        self.function_map[name] = func_node
-
-    def has_function(self, name):
-        """Check if a function exists in the function map"""
-        return name in self.function_map
-
-    def get_function(self, name):
-        """Get a function from the function map"""
-        return self.function_map[name]
 
 def is_literal_node(node):
     """Check if a node represents a literal value (for global var init)"""
@@ -1187,63 +872,4 @@ class Parser:
         while self.token.type != TT_EOF:
             statements.append(self.statement())
         return statements
-
-def run(text):
-    lexer = Lexer(text)
-    parser = Parser(lexer)
-    try:
-        # Parse the program
-        program = parser.parse()
-        ast = program
-
-        # Create environment stack for execution
-        env = EnvironmentStack()
-
-        # First execute global variable declarations
-        for node in program:
-            if node.node_type == AST_NODE_VAR_DECL:
-                node.eval(env)
-
-        # Register functions in the function map (but don't execute them)
-        for node in program:
-            if node.node_type == AST_NODE_FUNCTION_DECL:
-                env.register_function(node.name, node)
-
-        # Check if main function exists
-        if not env.has_function("main"):
-            return {'success': False, 'error': "No 'main' function defined", 'ast': ast}
-
-        # Get main function
-        main_func = env.get_function("main")
-
-        # Make sure main has no parameters
-        if len(main_func.params) > 0:
-            return {'success': False, 'error': "Function 'main' cannot have parameters", 'ast': ast}
-
-        # Create a new scope for main function
-        env.enter_scope()
-
-        try:
-            # Execute main function
-            for stmt in main_func.body:
-                stmt.eval(env)
-
-            # Return both global and main's environment
-            return {
-                'success': True,
-                'global_env': env.stack[0],
-                'main_env': env.stack[1],
-                'ast': ast
-            }
-        except ReturnException as ret:
-            # If main returns a value, include it in the result
-            return {
-                'success': True,
-                'result': ret.value,
-                'global_env': env.stack[0],
-                'main_env': env.stack[1],
-                'ast': ast
-            }
-    except CompilerException as e:
-        return {'success': False, 'error': str(e), 'ast': None}
 
