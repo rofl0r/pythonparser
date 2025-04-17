@@ -507,6 +507,15 @@ class Lexer:
         self.pos = 0
         self.current_char = text[0] if text else None
 
+        self.simple_tokens = {
+            ',': TT_COMMA,
+            ';': TT_SEMI,
+            '(': TT_LPAREN,
+            ')': TT_RPAREN,
+            # FIXME: do we need those? we have bitand/bitor keywords
+            '&': TT_BITAND,
+            '|': TT_BITOR,
+        }
         # Map of characters to their respective handler methods
         self.op_map = {
             '+': self.handle_plus,
@@ -515,27 +524,23 @@ class Lexer:
             '*': self.handle_mult,
             '/': self.handle_div,
             '%': self.handle_mod,
-            '(': self.handle_lparen,
-            ')': self.handle_rparen,
-            ';': self.handle_semi,
             '=': self.handle_assign_or_eq,
             '!': self.handle_not_or_ne,
             '>': self.handle_ge,
             '<': self.handle_le,
-            '&': self.handle_bitand,
-            '|': self.handle_bitor,
             ':': self.handle_colon,  # Added for type annotations
-            ',': self.handle_comma,  # Added for function parameters
         }
 
-    def make_token(self, token_type, value):
+    def make_token(self, token_type, value, do_advance=True):
         """Helper to create a token with current line and column info"""
-        return Token(token_type, value, self.line, self.column)
+        token = Token(token_type, value, self.line, self.column)
+        if do_advance: self.advance()
+        return token
 
     def error(self, message="Invalid character"):
         raise CompilerException('%s at line %d, column %d: "%s"' %
                        (message, self.line, self.column, self.current_char))
-                       
+
     def advance(self):
         # Update line and column tracking
         if self.current_char == '\n':
@@ -551,16 +556,9 @@ class Lexer:
             self.advance()
 
     def skip_until(self, terminator):
-        """
-        Skip all characters until the terminator character is found or EOF.
-        Does NOT consume the terminator character itself.
-        Args:
-            terminator: The character to stop at
-        """
+        """Skip chars until the terminator char is found or EOF w/o consuming the terminator"""
         while self.current_char is not None and self.current_char != terminator:
             self.advance()
-        # Note: At this point, current_char is either None (EOF) or the terminator character
-        # We don't advance further, leaving the terminator to be processed by other methods
 
     def number(self):
         """Parse a number (integer or float)"""
@@ -674,12 +672,11 @@ class Lexer:
 
         # Look up in the global KEYWORDS hashtable, default to TT_IDENT if not found
         token_type = KEYWORDS.get(value_str, TT_IDENT)
-        return self.make_token(token_type, value_str)
+        return self.make_token(token_type, value_str, do_advance=False)
 
     # Handlers for various operators
     def handle_plus(self):
         token = self.make_token(TT_PLUS, '+')
-        self.advance()
         if self.current_char == '=':
             token.type = TT_PLUS_ASSIGN
             token.value = '+='
@@ -688,7 +685,6 @@ class Lexer:
 
     def handle_minus(self):
         token = self.make_token(TT_MINUS, '-')
-        self.advance()
         if self.current_char == '=':
             token.type = TT_MINUS_ASSIGN
             token.value = '-='
@@ -697,7 +693,6 @@ class Lexer:
 
     def handle_mult(self):
         token = self.make_token(TT_MULT, '*')
-        self.advance()
         if self.current_char == '=':
             token.type = TT_MULT_ASSIGN
             token.value = '*='
@@ -706,7 +701,6 @@ class Lexer:
 
     def handle_div(self):
         token = self.make_token(TT_DIV, '/')
-        self.advance() # Skip the first '/'
         # Handle C++-style comments
         if self.current_char == '/':
             # Skip first '/'
@@ -721,31 +715,14 @@ class Lexer:
 
     def handle_mod(self):
         token = self.make_token(TT_MOD, '%')
-        self.advance()
         if self.current_char == '=':
             token.type = TT_MOD_ASSIGN
             token.value = '%='
             self.advance()
         return token
 
-    def handle_lparen(self):
-        token = self.make_token(TT_LPAREN, '(')
-        self.advance()
-        return token
-
-    def handle_rparen(self):
-        token = self.make_token(TT_RPAREN, ')')
-        self.advance()
-        return token
-
-    def handle_semi(self):
-        token = self.make_token(TT_SEMI, ';')
-        self.advance()
-        return token
-
     def handle_assign_or_eq(self):
         token = self.make_token(TT_ASSIGN, '=')
-        self.advance()
         if self.current_char == '=':
             token.type = TT_EQ
             token.value = '=='
@@ -754,7 +731,6 @@ class Lexer:
 
     def handle_not_or_ne(self):
         token = self.make_token(TT_NOT, '!')
-        self.advance()
         if self.current_char == '=':
             token.type = TT_NE
             token.value = '!='
@@ -763,7 +739,6 @@ class Lexer:
 
     def handle_ge(self):
         token = self.make_token(TT_GT, '>')
-        self.advance()
         if self.current_char == '=':
             token.type = TT_GE
             token.value = '>='
@@ -772,46 +747,24 @@ class Lexer:
 
     def handle_le(self):
         token = self.make_token(TT_LT, '<')
-        self.advance()
         if self.current_char == '=':
             token.type = TT_LE
             token.value = '<='
             self.advance()
         return token
 
-    def handle_bitand(self):
-        token = self.make_token(TT_BITAND, '&')
-        self.advance()
-        # No &= operator since we use keywords for bitwise operations
-        return token
-
-    def handle_bitor(self):
-        token = self.make_token(TT_BITOR, '|')
-        self.advance()
-        # No |= operator since we use keywords for bitwise operations
-        return token
-        
     def handle_colon(self):
         token = self.make_token(TT_COLON, ':')
-        self.advance()
         if self.current_char == '=':
             token.type = TT_TYPE_ASSIGN
             token.value = ':='
             self.advance()
         return token
-    
-    def handle_comma(self):
-        """Handle comma token for function parameters"""
-        token = self.make_token(TT_COMMA, ',')
-        self.advance()
-        return token
 
     def next_token(self):
         while self.current_char:
             if self.current_char == '\n':
-                token = self.make_token(TT_NEWLINE, '\n')
-                self.advance()
-                return token
+                return self.make_token(TT_NEWLINE, '\n')
 
             if self.current_char.isspace():
                 self.skip_whitespace()
@@ -826,13 +779,16 @@ class Lexer:
             if self.current_char.isalpha() or self.current_char == '_':
                 return self.identifier()
 
+            if self.current_char in self.simple_tokens:
+                return self.make_token(self.simple_tokens[self.current_char], self.current_char)
+
             # Use op_map for operators
             if self.current_char in self.op_map:
                 return self.op_map[self.current_char]()
 
             self.error()
 
-        return self.make_token(TT_EOF, None)
+        return self.make_token(TT_EOF, None, do_advance=False)
 
 # Custom exceptions for control flow
 class BreakException(Exception):
