@@ -350,11 +350,11 @@ class ReturnNode(ASTNode):
             return "Return()"
 
 class FunctionCallNode(ASTNode):
-    def __init__(self, name, args):
+    def __init__(self, name, args, expr_type = TYPE_UNKNOWN):
         ASTNode.__init__(self, AST_NODE_FUNCTION_CALL)
         self.name = name
         self.args = args
-        self.expr_type = TYPE_UNKNOWN  # Will be set during type checking
+        self.expr_type = expr_type  # Will be set during type checking
 
     def eval(self, env):
         # Get function from function map
@@ -1073,7 +1073,11 @@ class Parser:
             right = self.expression(self.lbp(t))
 
             # If types don't match, we need to fail
-            if left.expr_type != right.expr_type and left.expr_type != TYPE_UNKNOWN and right.expr_type != TYPE_UNKNOWN and not can_promote(right.expr_type, left.expr_type):
+            if can_promote(left.expr_type, right.expr_type):
+                result_type = right.expr_type
+            elif can_promote(right.expr_type, left.expr_type):
+                result_type = left.expr_type
+            else:
                 self.error("Type mismatch in binary operation: %s and %s" %
                           (var_type_to_string(left.expr_type), var_type_to_string(right.expr_type)))
 
@@ -1193,7 +1197,7 @@ class Parser:
                 if arg.expr_type != param_type and not can_promote(arg.expr_type, param_type):
                         self.error("Type mismatch for argument %d of function '%s': expected %s, got %s" %
                                          (i+1, func_name, var_type_to_string(param_type), var_type_to_string(arg.expr_type)))
-        return FunctionCallNode(func_name, args)
+        return FunctionCallNode(func_name, args, func_return_type)
 
     def statement(self):
         self.skip_separators()

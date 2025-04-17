@@ -8,12 +8,20 @@ def test():
         # Regular test cases (expected to succeed)
         # Each has "code" and "expected_env"
         {
-           "name": "test funccall",
+           "name": "test funccall, type promotion",
            "code": """
-                def add(a:int, b:int):int do return a + b; end
-                def main() do var result := add(1, 2); end
+                def add(a:long, b:int):long do return a + b; end
+                def main() do var result := add(add(1l, 3), 1); end
            """,
-           "expected_env": {"result": 3}
+           "expected_env": {"result": 5}
+        },
+        {
+           "name": "test funccall, type promotion 2",
+           "code": """
+                def add(a:int, b:long):long do return a + b; end
+                def main() do var result := add(1, add(1, 3l)); end
+           """,
+           "expected_env": {"result": 5}
         },
         {
            "name": "empty function",
