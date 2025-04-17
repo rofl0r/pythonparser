@@ -516,19 +516,21 @@ class Lexer:
             '&': TT_BITAND,
             '|': TT_BITOR,
         }
+        self.compound_tokens = {
+            '+': (TT_PLUS, TT_PLUS_ASSIGN),
+            '-': (TT_MINUS, TT_MINUS_ASSIGN),
+            '*': (TT_MULT, TT_MULT_ASSIGN),
+            '%': (TT_MOD, TT_MOD_ASSIGN),
+            '=': (TT_ASSIGN, TT_EQ),
+            '!': (TT_NOT, TT_NE),
+            '>': (TT_GT, TT_GE),
+            '<': (TT_LT, TT_LE),
+            ':': (TT_COLON, TT_TYPE_ASSIGN),
+        }
         # Map of characters to their respective handler methods
         self.op_map = {
-            '+': self.handle_plus,
-            '-': self.handle_minus,
             '"': self.handle_string,
-            '*': self.handle_mult,
             '/': self.handle_div,
-            '%': self.handle_mod,
-            '=': self.handle_assign_or_eq,
-            '!': self.handle_not_or_ne,
-            '>': self.handle_ge,
-            '<': self.handle_le,
-            ':': self.handle_colon,  # Added for type annotations
         }
 
     def make_token(self, token_type, value, do_advance=True):
@@ -563,40 +565,40 @@ class Lexer:
     def number(self):
         """Parse a number (integer or float)"""
         start = self.pos
-        
+
         # Track the start position for creating the token later
         start_line = self.line
         start_column = self.column
-        
+
         # Read the first part of the number (digits before decimal point)
         while self.current_char and self.current_char.isdigit():
             self.advance()
 
         # Check for suffix first (u, l, ul, lu) - needs to be checked before decimal point
-        if self.current_char in ['u', 'U', 'l', 'L']:
+        if self.current_char in ['u', 'l']:
             num_value = int(self.text[start:self.pos])
             suffix = self.parse_int_suffix()
-            
+
             # Create appropriate token based on suffix
             if suffix == 'u': return Token(TT_UINT_LITERAL, num_value, start_line, start_column)
             if suffix == 'l': return Token(TT_LONG_LITERAL, num_value, start_line, start_column)
-            if suffix in ['ul', 'lu']: return Token(TT_ULONG_LITERAL, num_value, start_line, start_column)
-            
+            if suffix == 'ul': return Token(TT_ULONG_LITERAL, num_value, start_line, start_column)
+
             # If we get here, an invalid suffix was used
             self.error("Invalid integer literal suffix: '%s'" % suffix)
-         
+
         # Check for decimal point (for float literals)
         if self.current_char == '.':
             self.advance()
-            
+
             # For our restricted syntax, there MUST be at least one digit after the decimal
             if not (self.current_char and self.current_char.isdigit()):
                 self.error("Invalid float literal: requires digits after decimal point")
-                
+
             # Read digits after decimal point
             while self.current_char and self.current_char.isdigit():
                 self.advance()
-            
+
             # Create a float token
             value_str = self.text[start:self.pos]
             value = float(value_str)
@@ -608,29 +610,21 @@ class Lexer:
             return Token(TT_INT_LITERAL, value, start_line, start_column)
 
     def parse_int_suffix(self):
-        """Parse integer literal suffixes (u, l, ul, lu)"""
-        suffix = ""
-        
-        # Read first character
-        if self.current_char in ['u', 'U']:
-            suffix += 'u'
+        """Parse integer literal suffixes (u, l, ul)"""
+        if self.current_char == 'u':
             self.advance()
-            # Check for 'l' or 'L' after 'u'
-            if self.current_char in ['l', 'L']:
-                suffix += 'l'
+            if self.current_char == 'l':
                 self.advance()
-        elif self.current_char in ['l', 'L']:
-            suffix += 'l'
+                return 'ul'
+            return 'u'
+        elif self.current_char == 'l':
             self.advance()
-            # Check for 'u' or 'U' after 'l'
-            if self.current_char in ['u', 'U']:
-                suffix += 'u'
+            if self.current_char == 'u':
                 self.advance()
-        else:
-            self.error("Expected integer literal suffix")
-        
-        return suffix.lower()  # Normalize to lowercase
-        
+                return 'ul'  # standardize to 'ul' even if input was 'lu'
+            return 'l'
+        self.error("Expected integer literal suffix")
+
     def handle_string(self):
         """Handle string literals"""
         # Record starting position for error reporting
@@ -674,31 +668,15 @@ class Lexer:
         token_type = KEYWORDS.get(value_str, TT_IDENT)
         return self.make_token(token_type, value_str, do_advance=False)
 
+    def handle_compound_op(self, base_value, base_type, compound_type):
+        token = self.make_token(base_type, base_value)
+        if self.current_char == '=':
+            token.type = compound_type
+            token.value += '='
+            self.advance()
+        return token
+
     # Handlers for various operators
-    def handle_plus(self):
-        token = self.make_token(TT_PLUS, '+')
-        if self.current_char == '=':
-            token.type = TT_PLUS_ASSIGN
-            token.value = '+='
-            self.advance()
-        return token
-
-    def handle_minus(self):
-        token = self.make_token(TT_MINUS, '-')
-        if self.current_char == '=':
-            token.type = TT_MINUS_ASSIGN
-            token.value = '-='
-            self.advance()
-        return token
-
-    def handle_mult(self):
-        token = self.make_token(TT_MULT, '*')
-        if self.current_char == '=':
-            token.type = TT_MULT_ASSIGN
-            token.value = '*='
-            self.advance()
-        return token
-
     def handle_div(self):
         token = self.make_token(TT_DIV, '/')
         # Handle C++-style comments
@@ -710,54 +688,6 @@ class Lexer:
         elif self.current_char == '=':
             token.type = TT_DIV_ASSIGN
             token.value = '/='
-            self.advance()
-        return token
-
-    def handle_mod(self):
-        token = self.make_token(TT_MOD, '%')
-        if self.current_char == '=':
-            token.type = TT_MOD_ASSIGN
-            token.value = '%='
-            self.advance()
-        return token
-
-    def handle_assign_or_eq(self):
-        token = self.make_token(TT_ASSIGN, '=')
-        if self.current_char == '=':
-            token.type = TT_EQ
-            token.value = '=='
-            self.advance()
-        return token
-
-    def handle_not_or_ne(self):
-        token = self.make_token(TT_NOT, '!')
-        if self.current_char == '=':
-            token.type = TT_NE
-            token.value = '!='
-            self.advance()
-        return token
-
-    def handle_ge(self):
-        token = self.make_token(TT_GT, '>')
-        if self.current_char == '=':
-            token.type = TT_GE
-            token.value = '>='
-            self.advance()
-        return token
-
-    def handle_le(self):
-        token = self.make_token(TT_LT, '<')
-        if self.current_char == '=':
-            token.type = TT_LE
-            token.value = '<='
-            self.advance()
-        return token
-
-    def handle_colon(self):
-        token = self.make_token(TT_COLON, ':')
-        if self.current_char == '=':
-            token.type = TT_TYPE_ASSIGN
-            token.value = ':='
             self.advance()
         return token
 
@@ -781,6 +711,10 @@ class Lexer:
 
             if self.current_char in self.simple_tokens:
                 return self.make_token(self.simple_tokens[self.current_char], self.current_char)
+
+            if self.current_char in self.compound_tokens:
+                bt, ct = self.compound_tokens[self.current_char]
+                return self.handle_compound_op(self.current_char, bt, ct)
 
             # Use op_map for operators
             if self.current_char in self.op_map:
